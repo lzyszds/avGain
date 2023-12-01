@@ -1,0 +1,2 @@
+vite-plugin-electron
+这个依赖要装新版本的，不然在viteconfig里面导入会报错

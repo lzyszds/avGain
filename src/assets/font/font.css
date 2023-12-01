@@ -1,0 +1,27 @@
+/* @font-face {
+  font-family: 'almama';
+  src: url('./almama2.0.ttf');
+} */
+
+
+
+@font-face {
+  font-family: 'dindin';
+  src: url('./dindinjinbuti/DingTalk_JinBuTi_Regular.woff2');
+}
+
+@font-face {
+  font-family: 'almama';
+  src: url('./alibaba/Alimama_ShuHeiTi_Bold.woff2');
+}
+
+
+@font-face {
+  font-family: 'firaCode';
+  src: url('./FiraCode.ttf');
+}
+
+@font-face {
+  font-family: 'black-Magic';
+  src: url('./Black-Magic/Black-Magic-2.ttf');
+}
