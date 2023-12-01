@@ -19,3 +19,5 @@
    ![添加界面](/public/image-1.png)
 3. 添加界面，添加具体需要爬取的数据详情 点击 add item 等待爬取即可
    ![Alt text](/public/image-2.png)
+4. 必须要使用 cloudflare warp 来进行网络加速，不然会很慢 会出问题
+   ![Alt text](/public/image-3.png)
