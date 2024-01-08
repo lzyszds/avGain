@@ -4,11 +4,16 @@ import Plyr from "plyr";
 import { useRouter } from "vue-router";
 import LzyIcon from "@/components/LzyIcon.vue";
 import { Videodatalist, listVideoHasObj } from "./Home";
-const { onHandleStoreData, onHandleOpenDir, onGetListData, onCreateDir } = window.myElectron;
+const {
+  onHandleStoreData,
+  onHandleOpenDir,
+  onGetListData,
+  onCreateDir,
+  onHandleDeleteFile,
+} = window.myElectron;
 
 onMounted(() => {
   const player = new Plyr("#video", {
-
     disableContextMenu: false,
     /* selected：默认播放速度。options：在 UI 中显示的速度选项。YouTube 和 Vimeo 将忽略 0.5-2 范围之外的任何选项，因此该范围之外的选项将自动隐藏。 */
     // selected: 1,
@@ -45,17 +50,22 @@ onMounted(() => {
       listVideoHasObj.filters.fill(true);
       // 初始化视频播放
       video.value = videoDataList.value[0].url;
-      document.querySelector('.plyr__title')!.innerHTML = videoDataList.value[0].name
+      document.querySelector(".plyr__title")!.innerHTML = videoDataList.value[0].name;
+    } else {
+      dirPath.cover.path = "L:/av/public/cover";
+      dirPath.preview.path = "L:/av/public/preview";
+      dirPath.video.path = "L:/av/public/video";
+      dirPath.videoDownload.path = "L:/av/public/videoDownload";
     }
   }, 500);
-
 });
 const router = useRouter(); //路由
 const setDialog = ref(false); //设置弹窗
 const listDialog = ref(false); //目录弹窗
 const video = ref(""); //视频
 const videoDataList = ref<Videodatalist[]>([]); //视频列表
-const listVideoHasObj = reactive<listVideoHasObj>({ //视频目录列表
+const listVideoHasObj = reactive<listVideoHasObj>({
+  //视频目录列表
   showPreview: [],
   filters: [],
 });
@@ -72,13 +82,13 @@ const toolHandle = [
   {
     tipsContent: "切换模式",
     icon: "basil:exchange-solid",
-    handle: () => { },
+    handle: () => {},
   },
   {
     tipsContent: "目录列表",
     icon: "basil:book-outline",
     handle: () => {
-      listDialog.value = true
+      listDialog.value = true;
     },
   },
   {
@@ -125,13 +135,13 @@ const saveDirPath = async () => {
   setDialog.value = false;
 };
 const createDirFn = async () => {
-  let userSelectPath = await onHandleOpenDir()
-  for (let key of ['cover', 'preview', 'video', 'videoDownload']) {
-    await onCreateDir(userSelectPath + "\\" + key)
-    dirPath[key].path = userSelectPath + "\\" + key
+  let userSelectPath = await onHandleOpenDir();
+  for (let key of ["cover", "preview", "video", "videoDownload"]) {
+    await onCreateDir(userSelectPath + "\\" + key);
+    dirPath[key].path = userSelectPath + "\\" + key;
   }
-  await saveDirPath()
-}
+  await saveDirPath();
+};
 
 //鼠标移入移出事件
 const handleMouse = (type: string, index: number) => {
@@ -141,8 +151,8 @@ const handleMouse = (type: string, index: number) => {
     listVideoHasObj.showPreview[index] = false;
   } else if (type === "click") {
     video.value = videoDataList.value[index].url;
-    listDialog.value = false
-    document.querySelector('.plyr__title')!.innerHTML = videoDataList.value[index].name
+    listDialog.value = false;
+    document.querySelector(".plyr__title")!.innerHTML = videoDataList.value[index].name;
   }
 };
 
@@ -153,6 +163,10 @@ const searchHandle = () => {
     listVideoHasObj.filters[index] = item.name.includes(search.value);
   });
 };
+
+const deleteFile = (item) => {
+  onHandleDeleteFile(item.name);
+};
 </script>
 
 <template>
@@ -160,8 +174,13 @@ const searchHandle = () => {
     <el-container>
       <el-main>
         <div class="toHref">
-          <LzyBtn v-for="(item, index) in toolHandle" :key="index" :icon="item.icon" :tipsContent="item.tipsContent"
-            :handle="item.handle"></LzyBtn>
+          <LzyBtn
+            v-for="(item, index) in toolHandle"
+            :key="index"
+            :icon="item.icon"
+            :tipsContent="item.tipsContent"
+            :handle="item.handle"
+          ></LzyBtn>
           <div class="search">
             <ElInput v-model="search" @keydown.enter="searchHandle" size="small">
             </ElInput>
@@ -169,19 +188,37 @@ const searchHandle = () => {
           </div>
         </div>
         <div class="videoContent">
-          <video id="video" :src="video" style="display: none" controls crossorigin="" playsinline poster="">
+          <video
+            id="video"
+            :src="video"
+            style="display: none"
+            controls
+            crossorigin=""
+            playsinline
+            poster=""
+          >
             <source type="video/mp4" />
           </video>
         </div>
       </el-main>
       <el-aside class="coverList" width="380px">
         <ul>
-          <li v-for="(item, index) in videoDataList" :key="index" @mouseenter="handleMouse('enter', index)"
-            @mouseleave="handleMouse('leave', index)" @click="handleMouse('click', index)"
-            v-show="listVideoHasObj.filters[index]">
-            <video v-if="listVideoHasObj.showPreview[index]" autoplay muted :src="item.preview"></video>
+          <li
+            v-for="(item, index) in videoDataList"
+            :key="index"
+            @mouseenter="handleMouse('enter', index)"
+            @mouseleave="handleMouse('leave', index)"
+            @click="handleMouse('click', index)"
+            v-show="listVideoHasObj.filters[index]"
+          >
+            <video
+              v-if="listVideoHasObj.showPreview[index]"
+              autoplay
+              muted
+              :src="item.preview"
+            ></video>
             <img v-else :src="item.cover" alt="" />
-
+            <button class="deleteFile" @click="deleteFile(item)">删除</button>
             <h4>
               {{ item.name }}
             </h4>
@@ -203,16 +240,37 @@ const searchHandle = () => {
         </p>
       </div>
       <template #footer>
-        <LzyBtn @click="createDirFn" title="一键生成文件夹" icon="system-uicons:episodes"></LzyBtn>
+        <LzyBtn
+          @click="createDirFn"
+          title="一键生成文件夹"
+          icon="system-uicons:episodes"
+        ></LzyBtn>
         <LzyBtn @click="saveDirPath" title="保存" icon="basil:save-outline"></LzyBtn>
       </template>
     </el-dialog>
-    <el-dialog class="listContent" v-model="listDialog" :fullscreen="true" title="Warning" width="100%" align-center>
+    <el-dialog
+      class="listContent"
+      v-model="listDialog"
+      :fullscreen="true"
+      title="Warning"
+      width="100%"
+      align-center
+    >
       <ul>
-        <li v-for="(item, index) in videoDataList" :key="index" @mouseenter="handleMouse('enter', index)"
-          @mouseleave="handleMouse('leave', index)" @click="handleMouse('click', index)"
-          v-show="listVideoHasObj.filters[index]">
-          <video v-if="listVideoHasObj.showPreview[index]" autoplay muted :src="item.preview"></video>
+        <li
+          v-for="(item, index) in videoDataList"
+          :key="index"
+          @mouseenter="handleMouse('enter', index)"
+          @mouseleave="handleMouse('leave', index)"
+          @click="handleMouse('click', index)"
+          v-show="listVideoHasObj.filters[index]"
+        >
+          <video
+            v-if="listVideoHasObj.showPreview[index]"
+            autoplay
+            muted
+            :src="item.preview"
+          ></video>
           <img v-else :src="item.cover" alt="" />
 
           <h4>
@@ -259,8 +317,7 @@ const searchHandle = () => {
     width: 100%;
     height: 50px;
     background: linear-gradient(to top, #0000, #000000bf);
-    transition: opacity .4s ease-in-out,
-      transform .4s ease-in-out;
+    transition: opacity 0.4s ease-in-out, transform 0.4s ease-in-out;
     z-index: 2;
     color: #fff;
     user-select: all;
@@ -272,7 +329,6 @@ const searchHandle = () => {
     transform: translateY(-100%);
   }
 }
-
 
 .toHref {
   height: 60px;
@@ -365,7 +421,6 @@ const searchHandle = () => {
 }
 
 :deep(.listContent) {
-
   ul {
     grid-template-columns: repeat(5, 1fr);
     height: calc(100vh - 100px);
@@ -376,7 +431,7 @@ const searchHandle = () => {
     }
   }
 
-  &>div.el-dialog__body {
+  & > div.el-dialog__body {
     height: 93vh;
     padding: 5px;
   }
@@ -404,7 +459,8 @@ ul {
     margin: 0 5px;
     box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1), 0 -1px 1px rgba(0, 0, 0, 0.1);
     border: 1px solid #ddd;
-
+    display: grid;
+    grid-template-rows: 210px 1fr 20px;
     &.acitve::after {
       content: "";
       width: 50px;
@@ -416,7 +472,17 @@ ul {
       background: url(./play.png) no-repeat;
       background-size: 100%;
     }
-
+    video,
+    img {
+      height: 200px;
+      width: 328px;
+    }
+    .deleteFile {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      border-radius: 0.5rem;
+    }
     h4 {
       /* height: 135px; */
       font-size: 14px;

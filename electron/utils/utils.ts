@@ -25,7 +25,12 @@ export function mkdirsSync(dirname) {
 export const createSystemStore = (app) => {
   const systemStore = join(app.getPath('documents'), 'javPlayer')
   mkdirsSync(systemStore)
-  fs.writeFileSync(join(systemStore, 'storeLog.json'), '{}', 'utf-8')
+  fs.writeFileSync(join(systemStore, 'storeLog.json'), `{
+    "coverPath": "L:/av/public/cover",
+    "previewPath": "L:/av/public/preview",
+    "videoPath": "L:/av/public/video",
+    "downloadPath": "L:/av/public/videoDownload"
+  }`, 'utf-8')
   return systemStore
 }
 

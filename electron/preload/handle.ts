@@ -20,7 +20,9 @@ const validChannels = [
   //清除文件夹内的内容
   'deleteDirFile',
   //创建文件夹
-  'onCreateDir',
+  'onCreateDir', 
+  //删除视频文件
+  'onHandleDeleteFile'
 ]
 
 const myElectron = {}

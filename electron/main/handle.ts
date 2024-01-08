@@ -18,6 +18,12 @@ import { merge } from '../utils/merge'
 export class WindowManager {
   private win: BrowserWindow;
   private app: App;
+  private pathJson: {
+    coverPath: string,
+    previewPath: string,
+    videoPath: string,
+    videoDownload: string
+  };
   private downloadPlanArr: any;
 
   /**
@@ -30,6 +36,12 @@ export class WindowManager {
   constructor(win: BrowserWindow, app: App, mainWindow: BrowserWindow) {
     this.win = win;
     this.app = app;
+    this.pathJson = {
+      coverPath: '',
+      previewPath: '',
+      videoPath: '',
+      videoDownload: ''
+    }
     //下载计划数组
     this.downloadPlanArr = []
     // 注册事件监听
@@ -43,6 +55,7 @@ export class WindowManager {
     this.registerGetDownloadListContent()
     this.registerDeleteDirFile()
     this.registerCreateDir()
+    this.registerHandleDeleteFile()
   }
 
   // 处理窗口操作请求
@@ -180,6 +193,7 @@ export class WindowManager {
     const storeFile = fs.readFileSync(storeFilePath, 'utf-8')
     const json = JSON.parse(storeFile)
     const { coverPath, previewPath, videoPath } = json
+    this.pathJson = json
     const coverList = fs.readdirSync(coverPath).map((file: any) => {
       if (!file.startsWith('.') && file.indexOf('Thumbs') == 0) return null
       if (file.indexOf('.png') == -1) {
@@ -374,6 +388,28 @@ export class WindowManager {
     ipcMain.handle('onCreateDir', this.onCreateDir.bind(this));
   }
 
+  private onHandleDeleteFile(event: Electron.IpcMainInvokeEvent, arg: any) {
+    const name = arg
+    const { videoPath, previewPath, coverPath } = this.pathJson
+    fs.access(`${videoPath}/${name}.mp4`, (err) => {
+      if (err) return console.log('文件不存在')
+      fs.unlinkSync(`${videoPath}/${name}.mp4`)
+    })
+    fs.access(`${previewPath}/${name}.mp4`, (err) => {
+      if (err) return console.log('文件不存在')
+      fs.unlinkSync(`${previewPath}/${name}.mp4`)
+    })
+    fs.access(`${coverPath}/${name}.jpg`, (err) => {
+      if (err) return console.log('文件不存在')
+      fs.unlinkSync(`${coverPath}/${name}.jpg`)
+    })
+
+
+  }
+
+  private registerHandleDeleteFile(): void {
+    ipcMain.handle('onHandleDeleteFile', this.onHandleDeleteFile.bind(this));
+  }
 }
 
 

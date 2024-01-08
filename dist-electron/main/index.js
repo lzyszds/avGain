@@ -716,7 +716,12 @@ function mkdirsSync(dirname) {
 const createSystemStore = (app) => {
   const systemStore = path.join(app.getPath("documents"), "javPlayer");
   mkdirsSync(systemStore);
-  fs$1.writeFileSync(path.join(systemStore, "storeLog.json"), "{}", "utf-8");
+  fs$1.writeFileSync(path.join(systemStore, "storeLog.json"), `{
+    "coverPath": "L:/av/public/cover",
+    "previewPath": "L:/av/public/preview",
+    "videoPath": "L:/av/public/video",
+    "downloadPath": "L:/av/public/videoDownload"
+  }`, "utf-8");
   return systemStore;
 };
 function formatFileSize(fileSize) {
@@ -839,9 +844,16 @@ class WindowManager {
   constructor(win2, app, mainWindow) {
     __publicField(this, "win");
     __publicField(this, "app");
+    __publicField(this, "pathJson");
     __publicField(this, "downloadPlanArr");
     this.win = win2;
     this.app = app;
+    this.pathJson = {
+      coverPath: "",
+      previewPath: "",
+      videoPath: "",
+      videoDownload: ""
+    };
     this.downloadPlanArr = [];
     this.registerHandleWin();
     this.registerHandleOpenDir();
@@ -852,6 +864,7 @@ class WindowManager {
     this.registerGetDownloadListContent();
     this.registerDeleteDirFile();
     this.registerCreateDir();
+    this.registerHandleDeleteFile();
   }
   // 处理窗口操作请求
   handleWinAction(arg) {
@@ -973,6 +986,7 @@ class WindowManager {
     const storeFile = fs$1.readFileSync(storeFilePath, "utf-8");
     const json = JSON.parse(storeFile);
     const { coverPath, previewPath, videoPath } = json;
+    this.pathJson = json;
     const coverList = fs$1.readdirSync(coverPath).map((file) => {
       if (!file.startsWith(".") && file.indexOf("Thumbs") == 0)
         return null;
@@ -1139,6 +1153,28 @@ class WindowManager {
   }
   registerCreateDir() {
     require$$3.ipcMain.handle("onCreateDir", this.onCreateDir.bind(this));
+  }
+  onHandleDeleteFile(event, arg) {
+    const name = arg;
+    const { videoPath, previewPath, coverPath } = this.pathJson;
+    fs$1.access(`${videoPath}/${name}.mp4`, (err) => {
+      if (err)
+        return console.log("文件不存在");
+      fs$1.unlinkSync(`${videoPath}/${name}.mp4`);
+    });
+    fs$1.access(`${previewPath}/${name}.mp4`, (err) => {
+      if (err)
+        return console.log("文件不存在");
+      fs$1.unlinkSync(`${previewPath}/${name}.mp4`);
+    });
+    fs$1.access(`${coverPath}/${name}.jpg`, (err) => {
+      if (err)
+        return console.log("文件不存在");
+      fs$1.unlinkSync(`${coverPath}/${name}.jpg`);
+    });
+  }
+  registerHandleDeleteFile() {
+    require$$3.ipcMain.handle("onHandleDeleteFile", this.onHandleDeleteFile.bind(this));
   }
 }
 function getHeaders(resource) {
