@@ -3,6 +3,7 @@ import { onMounted, ref, reactive } from "vue";
 import Plyr from "plyr";
 import { useRouter } from "vue-router";
 import LzyIcon from "@/components/LzyIcon.vue";
+import { ElMessageBox, ElMessage } from "element-plus";
 import { Videodatalist, listVideoHasObj } from "./Home";
 const {
   onHandleStoreData,
@@ -42,15 +43,8 @@ onMounted(() => {
 
     //判断是否存在文件夹路径 存在则获取视频数据
     if (dirPath.cover.path && dirPath.video.path && dirPath.preview.path) {
-      // 获取视频数据
-      videoDataList.value = await onGetListData();
-      // 初始化视频数据
-      listVideoHasObj.showPreview.length = videoDataList.value.length;
-      listVideoHasObj.filters.length = videoDataList.value.length;
-      listVideoHasObj.filters.fill(true);
-      // 初始化视频播放
-      video.value = videoDataList.value[0].url;
-      document.querySelector(".plyr__title")!.innerHTML = videoDataList.value[0].name;
+      // 初始化数据
+      await configVideoListData();
     } else {
       dirPath.cover.path = "L:/av/public/cover";
       dirPath.preview.path = "L:/av/public/preview";
@@ -163,9 +157,38 @@ const searchHandle = () => {
     listVideoHasObj.filters[index] = item.name.includes(search.value);
   });
 };
+async function configVideoListData() {
+  // 获取视频数据
+  videoDataList.value = await onGetListData();
+  // 初始化视频数据
+  listVideoHasObj.showPreview.length = videoDataList.value.length;
+  listVideoHasObj.filters.length = videoDataList.value.length;
+  listVideoHasObj.filters.fill(true);
+  // 初始化视频播放
+  video.value = videoDataList.value[0].url;
+  document.querySelector(".plyr__title")!.innerHTML = videoDataList.value[0].name;
+}
 
 const deleteFile = (item) => {
-  onHandleDeleteFile(item.name);
+  ElMessageBox.confirm("你确定要删除当前视频?", "温馨提醒", {
+    confirmButtonText: "删除",
+    cancelButtonText: "取消",
+    type: "error",
+  })
+    .then(async () => {
+      onHandleDeleteFile(item.name);
+      ElMessage({
+        type: "success",
+        message: "删除成功",
+      });
+      await configVideoListData();
+    })
+    .catch(() => {
+      ElMessage({
+        type: "success",
+        message: "取消删除",
+      });
+    });
 };
 </script>
 
@@ -218,7 +241,6 @@ const deleteFile = (item) => {
               :src="item.preview"
             ></video>
             <img v-else :src="item.cover" alt="" />
-            <button class="deleteFile" @click="deleteFile(item)">删除</button>
             <h4>
               {{ item.name }}
             </h4>
@@ -227,6 +249,7 @@ const deleteFile = (item) => {
               <span>{{ item.datails.time }}</span>
               <span>{{ item.datails.size }}</span>
             </span>
+            <button class="deleteFile" @click="deleteFile(item)">删除</button>
           </li>
         </ul>
       </el-aside>
@@ -460,7 +483,8 @@ ul {
     box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1), 0 -1px 1px rgba(0, 0, 0, 0.1);
     border: 1px solid #ddd;
     display: grid;
-    grid-template-rows: 210px 1fr 20px;
+    grid-template-rows: 210px 1fr 20px 30px;
+    gap: 10px;
     &.acitve::after {
       content: "";
       width: 50px;
@@ -474,22 +498,19 @@ ul {
     }
     video,
     img {
-      height: 200px;
+      height: 210px;
       width: 328px;
     }
     .deleteFile {
-      position: absolute;
-      top: 10px;
-      right: 10px;
+      width: 100%;
       border-radius: 0.5rem;
+      background-color: rgb(255, 74, 74);
+      color: #fff;
     }
     h4 {
       /* height: 135px; */
       font-size: 14px;
       color: #000;
-      margin-top: 0;
-      padding: 10px;
-      padding-top: 5px;
       border-radius: 10px;
       transform: translateY(0);
       transition: 0.3s transform ease-in-out;
