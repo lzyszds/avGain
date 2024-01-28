@@ -25,12 +25,15 @@ export function mkdirsSync(dirname) {
 export const createSystemStore = (app) => {
   const systemStore = join(app.getPath('documents'), 'javPlayer')
   mkdirsSync(systemStore)
-  fs.writeFileSync(join(systemStore, 'storeLog.json'), `{
-    "coverPath": "L:/av/public/cover",
-    "previewPath": "L:/av/public/preview",
-    "videoPath": "L:/av/public/video",
-    "downloadPath": "L:/av/public/videoDownload"
-  }`, 'utf-8')
+  //创建系统存储文件夹 如果不存在 则创建 并写入文件
+  if (!fs.existsSync(join(systemStore, 'storeLog.json'))) {
+    fs.writeFileSync(join(systemStore, 'storeLog.json'), `{
+      "coverPath": "L:/av/public/cover",
+      "previewPath": "L:/av/public/preview",
+      "videoPath": "L:/av/public/video",
+      "downloadPath": "L:/av/public/videoDownload"
+    }`, 'utf-8')
+  }
   return systemStore
 }
 

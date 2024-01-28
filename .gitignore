@@ -16,6 +16,7 @@ build
 
 # Editor directories and files
 .vscode/*
+electron/data/*.json
 !.vscode/extensions.json
 .idea
 .DS_Store

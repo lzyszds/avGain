@@ -13,6 +13,11 @@
 
 # 使用步骤
 
+必须先安装ffmpeg 不然无法转换视频格式
+安装方法
+<https://ffmpeg.org/download.html#build-windows>
+下载完成，直接导入进环境变量即可 
+在终端中输入 ffmpeg -version 查看是否安装成功
 1. 必须要先设置存储路径,不然所有功能都不能使用
    ![初始界面](/public/image.png)
 2. 前往指定平台拿到需要爬取的数据的 url 名字
