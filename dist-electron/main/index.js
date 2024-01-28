@@ -716,12 +716,14 @@ function mkdirsSync(dirname) {
 const createSystemStore = (app) => {
   const systemStore = path.join(app.getPath("documents"), "javPlayer");
   mkdirsSync(systemStore);
-  fs$1.writeFileSync(path.join(systemStore, "storeLog.json"), `{
-    "coverPath": "L:/av/public/cover",
-    "previewPath": "L:/av/public/preview",
-    "videoPath": "L:/av/public/video",
-    "downloadPath": "L:/av/public/videoDownload"
-  }`, "utf-8");
+  if (!fs$1.existsSync(path.join(systemStore, "storeLog.json"))) {
+    fs$1.writeFileSync(path.join(systemStore, "storeLog.json"), `{
+      "coverPath": "L:/av/public/cover",
+      "previewPath": "L:/av/public/preview",
+      "videoPath": "L:/av/public/video",
+      "downloadPath": "L:/av/public/videoDownload"
+    }`, "utf-8");
+  }
   return systemStore;
 };
 function formatFileSize(fileSize) {
