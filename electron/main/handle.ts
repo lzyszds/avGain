@@ -464,10 +464,15 @@ function sleep(timer: number) {
   })
 }
 function getPreviewVideo(id: string, name: string, getCoverIndex: number, previewPath: string, coverPath: string) {
+  const host = 'https://eightcha.com/'
+
+  //将id转换为小写
+  id = id.toLowerCase()
   let getHoverCoverIndex = 0 //第几次尝试下载hover图片的索引
   if (getCoverIndex >= 5 || getHoverCoverIndex >= 5) return
   /* 获取图片，图片来自missav.com中，因为这个网站没做拦截 */
-  const url = `https://cdn82.bestjavcdn.com/${id}/cover.jpg?class=normal`
+  const url = host + `${id}/cover.jpg?class=normal`
+  console.log(`lzy  url:`, url);
   https.get(url, (response) => {
     const localPath = coverPath + '/' + name + '.jpg'
     const fileStream = fs.createWriteStream(localPath);
@@ -477,7 +482,7 @@ function getPreviewVideo(id: string, name: string, getCoverIndex: number, previe
       fileStream.close();
       //下载第二张封面。hover中的封面
       function getHoverCoverImg(index: number) {
-        const urlVideo = `https://cdn82.bestjavcdn.com/${id}/preview.mp4`
+        const urlVideo = host + `${id}/preview.mp4`
         https.get(urlVideo, (response) => {
           const localPath = previewPath + '/' + name + '.mp4'
           const fileStream = fs.createWriteStream(localPath);
@@ -495,7 +500,7 @@ function getPreviewVideo(id: string, name: string, getCoverIndex: number, previe
     });
   }).on('error', (error) => {
     getPreviewVideo(id, name, ++getCoverIndex, previewPath, coverPath)
-    console.error('(即将重试)下载出错:', error);
+    console.error('(即将重试,如果还是不行,就可能是来源有问题https://missav.com/查看图片路径)下载出错:', error);
   });
 }
 

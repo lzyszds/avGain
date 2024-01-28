@@ -18,7 +18,7 @@ export async function merge(name: any, downPath: string, videoPath: string, thre
   const max = {
     // 一次性最大缓存 不限制
     maxBuffer: 1024 * 1024 * 1024,
-    cwd: 'L:\\av\\public\\videoDownload'
+    cwd: downPath
   }
 
   const cmd = `cd ${downPath} && ffmpeg -i "concat:${filenames}" -c copy -bsf:a aac_adtstoasc -movflags +faststart ${videoPath}/${name}.mp4`

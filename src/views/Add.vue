@@ -176,7 +176,7 @@ const speedDownloadHanlde = () => {
     newSize += res.state.size
   })
   console.log(newSize, oldSize);
-  speedDownload.value = Number(formatFileSize((newSize - oldSize) * 2)) == 0 ? speedDownload.value : formatFileSize((newSize - oldSize) * 2)
+  speedDownload.value = newSize == oldSize ? speedDownload.value : formatFileSize((newSize - oldSize) * 2)
   oldSize = newSize
 }
 
