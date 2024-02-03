@@ -1,7 +1,7 @@
 {
   "name": "AvGain",
   "private": true,
-  "version": "1.0.3",
+  "version": "1.0.4",
   "main": "dist-electron/main/index.js",
   "description": "av爬取软件",
   "author": "lzyszds",
@@ -11,7 +11,8 @@
     }
   },
   "scripts": {
-    "dev": "chcp 65001 && vite",
+    "dev": "chcp 65001 && vite ",
+    "clean": "tsc --build --clean",
     "create": "node createSeprate.js",
     "viteBuild": "vite build",
     "build": "tsc && vite build && electron-builder && tsc --build --clean",
