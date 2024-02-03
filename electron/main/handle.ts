@@ -194,11 +194,17 @@ export class WindowManager {
     const json = JSON.parse(storeFile)
     const { coverPath, previewPath, videoPath } = json
     this.pathJson = json
+    //获取视频列表 解决有些视频没有封面的问题
+    // const existArr = fs.readdirSync(videoPath)
     const coverList = fs.readdirSync(coverPath).map((file: any) => {
       if (!file.startsWith('.') && file.indexOf('Thumbs') == 0) return null
       if (file.indexOf('.png') == -1) {
-        const name = file.split('.')[0]
-        const url = name.replaceAll(" ", '')
+        const name = file.split('.jpg')[0]
+        //如果视频存在封面，将封面从数组中删除 以备后续下载
+        // if (existArr.indexOf(`${name}.mp4`) != -1) {
+        //   existArr.splice(existArr.indexOf(`${name}.mp4`), 1)
+        // }
+
         let stat: any = null, datails: any = null
         try {
           stat = fs.statSync(`${videoPath}/${name}.mp4`)
@@ -226,7 +232,15 @@ export class WindowManager {
         return null
       }
     }).filter((item) => item !== null);
-
+    //将没有封面的视频封面进行下载
+    // console.log(existArr);
+    // existArr.forEach((item: any) => {
+    //   const videoId = getVideoId(item)
+    //   if (videoId) {
+    //     const name = item.split('.mp4')[0]
+    //     getPreviewVideo(videoId, name, 0, previewPath, coverPath)
+    //   }
+    // })
     return quickSortByTimestamp(coverList.filter((res) => res), 'stampTime', false)
   }
   //注册onGetListData事件监听
@@ -444,6 +458,15 @@ function getIdNumber(val: string) {
   const index = val.indexOf(' ')
   return val.slice(0, index)
 }
+
+//识别视频番号
+function getVideoId(val: string) {
+  //使用正则
+  const reg = /[a-zA-Z]{2,6}-\d{3}/
+  const result = val.match(reg)
+  return result ? result[0] : null
+}
+
 //将数组拆分为相等的块
 function splitArrayIntoEqualChunks(array: string[], numberOfChunks: number) {
   const chunkSize = Math.ceil(array.length / numberOfChunks);

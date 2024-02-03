@@ -817,7 +817,7 @@ async function merge(name, downPath, videoPath, thread) {
   const max = {
     // 一次性最大缓存 不限制
     maxBuffer: 1024 * 1024 * 1024,
-    cwd: "L:\\av\\public\\videoDownload"
+    cwd: downPath
   };
   const cmd = `cd ${downPath} && ffmpeg -i "concat:${filenames}" -c copy -bsf:a aac_adtstoasc -movflags +faststart ${videoPath}/${name}.mp4`;
   child_process.exec(cmd, max, (err, stdout, stderr) => {
@@ -993,8 +993,7 @@ class WindowManager {
       if (!file.startsWith(".") && file.indexOf("Thumbs") == 0)
         return null;
       if (file.indexOf(".png") == -1) {
-        const name = file.split(".")[0];
-        name.replaceAll(" ", "");
+        const name = file.split(".jpg")[0];
         let stat = null, datails = null;
         try {
           stat = fs$1.statSync(`${videoPath}/${name}.mp4`);
@@ -1216,10 +1215,13 @@ function splitArrayIntoEqualChunks(array, numberOfChunks) {
   return result;
 }
 function getPreviewVideo(id, name, getCoverIndex, previewPath, coverPath) {
+  const host = "https://eightcha.com/";
+  id = id.toLowerCase();
   let getHoverCoverIndex = 0;
   if (getCoverIndex >= 5 || getHoverCoverIndex >= 5)
     return;
-  const url2 = `https://cdn82.bestjavcdn.com/${id}/cover.jpg?class=normal`;
+  const url2 = host + `${id}/cover.jpg?class=normal`;
+  console.log(`lzy  url:`, url2);
   https.get(url2, (response) => {
     const localPath = coverPath + "/" + name + ".jpg";
     const fileStream = fs$1.createWriteStream(localPath);
@@ -1228,7 +1230,7 @@ function getPreviewVideo(id, name, getCoverIndex, previewPath, coverPath) {
       console.log("图片下载成功");
       fileStream.close();
       function getHoverCoverImg(index) {
-        const urlVideo = `https://cdn82.bestjavcdn.com/${id}/preview.mp4`;
+        const urlVideo = host + `${id}/preview.mp4`;
         https.get(urlVideo, (response2) => {
           const localPath2 = previewPath + "/" + name + ".mp4";
           const fileStream2 = fs$1.createWriteStream(localPath2);
@@ -1246,7 +1248,7 @@ function getPreviewVideo(id, name, getCoverIndex, previewPath, coverPath) {
     });
   }).on("error", (error) => {
     getPreviewVideo(id, name, ++getCoverIndex, previewPath, coverPath);
-    console.error("(即将重试)下载出错:", error);
+    console.error("(即将重试,如果还是不行,就可能是来源有问题https://missav.com/查看图片路径)下载出错:", error);
   });
 }
 process.env.DIST_ELECTRON = path.join(__dirname, "..");
