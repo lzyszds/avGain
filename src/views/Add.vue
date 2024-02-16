@@ -12,9 +12,11 @@
         </span>
         <span>{{ formatFileSize(item.state.size) }}</span>
       </li>
-      <li>
+      <li class="tools">
         <LzyBtn :handle="getDownloadListContent" title="刷新" icon="ant-design:reload-outlined"></LzyBtn>
         <LzyBtn :handle="deleteDirFile" title="清空" icon="ant-design:delete-twotone"></LzyBtn>
+        <LzyBtn :title="getDownloadSize()" icon="ic:baseline-insert-chart-outlined"></LzyBtn>
+
       </li>
     </ul>
     <div class="addMain">
@@ -37,7 +39,7 @@
           <el-input v-model="sizeForm.url" :autosize="{ minRows: 3, maxRows: 5 }" type="textarea" />
         </el-form-item>
         <el-form-item label="下载线程">
-          <el-input v-model="sizeForm.thread" type="number" />
+          <el-input v-model="sizeForm.thread" type="number" max="20" min="1" />
         </el-form-item>
         <el-form-item class="sumbit">
           <!-- v-show="speedDownload" -->
@@ -45,7 +47,7 @@
           <el-progress :text-inside="true" :percentage="percentage" color="#fe638f" />
           <span>{{ progress[0] }}/{{ progress[1] }}</span>
           <button class="button download" @click="onSubmit" type="button">
-            <span class="button__text">Add Item</span>
+            <span class="button__text">开始下载</span>
             <span class="button__icon"><svg class="svg" fill="none" height="24" stroke="currentColor"
                 stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24"
                 xmlns="http://www.w3.org/2000/svg">
@@ -55,10 +57,28 @@
           </button>
         </el-form-item>
       </el-form>
+      <el-button @click="addAlternate">添加备选</el-button>
+      <div class="alternateList">
+        <el-card shadow="never" v-for="(item, index) in alternateArr" :key="index">
+          <p>{{ index + 1 }}</p>
+          <el-form-item label="番号名字">
+            <div class="alterTools">
+              <el-input v-model="item.name" />
+              <el-button type="primary" @click="useAlternate(item)">更换备选</el-button>
+            </div>
+          </el-form-item>
+          <el-form-item label="下载地址">
+            <div class="alterTools">
+              <el-input v-model="item.url" />
+              <el-button type="primary" @click="() => alternateArr.splice(index, 1)">删除</el-button>
+            </div>
+          </el-form-item>
+        </el-card>
+      </div>
     </div>
     <div class="footer">
       <el-collapse class="collapse" v-model="activeNames" :accordion="true">
-        <el-collapse-item v-for="(item, index) in downloadHistory" :key="index" :title="item.name" :name="index">
+        <el-collapse-item v-for="( item, index ) in  downloadHistory " :key="index" :title="item.name" :name="index">
           <div>
             {{ item.url }}
           </div>
@@ -86,6 +106,10 @@ const sizeForm = reactive({
   url: '',
   thread: 10,
 })
+const alternateArr = reactive([
+  { name: '', url: '' }
+])
+
 const percentage = ref(0)
 const progress = ref<number[]>([])
 
@@ -111,6 +135,7 @@ async function onSubmit() {
   el.downloadVideoEvent({
     ...sizeForm, downPath, previewPath, coverPath, videoPath
   }).then(res => {
+    console.log(`lzy  res:`, res)
     ElNotification({
       title: '下载提示：',
       message: res + ':' + sizeForm.name,
@@ -118,6 +143,15 @@ async function onSubmit() {
       duration: 0
     })
     clearInterval(timer)
+    setTimeout(() => {
+      //将备选内容第一个赋值给sizeForm 并删除备选内容 然后开始下载下一个
+      if (alternateArr.length > 0) {
+        sizeForm.name = alternateArr[0].name
+        sizeForm.url = alternateArr[0].url
+        alternateArr.splice(0, 1)
+        onSubmit()
+      }
+    }, 10000)
   })
   timer = setInterval(async () => {
     const arr = await el.getDownloadSpeed()
@@ -180,6 +214,23 @@ const speedDownloadHanlde = () => {
   oldSize = newSize
 }
 
+//获取总下载内容大小
+const getDownloadSize = () => {
+  let newSize = 0
+  fileDirlist.value.forEach((res) => {
+    newSize += res.state.size
+  })
+  return formatFileSize(newSize)
+}
+//添加备选 
+const addAlternate = () => {
+  alternateArr.push({ name: '', url: '' })
+}
+//使用备选
+const useAlternate = (item) => {
+  sizeForm.name = item.name
+  sizeForm.url = item.url
+}
 </script>
 
 <style scoped lang="scss">
@@ -225,6 +276,16 @@ ul {
       margin-top: 10px;
     }
 
+    &.tools {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      grid-template-rows: 1fr 1fr;
+      gap: 10px;
+
+      button:nth-child(3) {
+        grid-column: 1 / 3;
+      }
+    }
   }
 
 }
@@ -235,7 +296,7 @@ ul {
   margin: auto;
   border-radius: 10px;
   display: grid;
-  grid-template-rows: 60px 345px 1fr;
+  grid-template-rows: 60px 345px 30px 1fr;
   gap: 10px;
   user-select: none !important;
   box-shadow: var(--el-box-shadow-lighter);
@@ -256,12 +317,50 @@ ul {
 
   .sumbit :deep(.el-form-item__content) {
     justify-content: end;
-    gap: 10px;
+    gap: 20px;
     display: grid;
-    grid-template-columns: 60px 1fr 50px 160px;
+    grid-template-columns: 60px 1fr 60px 150px;
 
     span {
       text-align: center;
+    }
+  }
+
+  .alternateList {
+    overflow-y: scroll;
+    height: 450px;
+
+    .el-card {
+      margin-bottom: 10px;
+      position: relative;
+
+      :deep(.el-card__body) {
+        display: grid;
+        grid-template-columns: 50px 1fr;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+
+        .el-form-item {
+          margin: 0;
+        }
+      }
+
+      p {
+        text-align: center;
+        font-family: 'dindin';
+        font-size: 2rem;
+        margin: 0;
+        grid-row: 1 / 3;
+        border-radius: 10px;
+      }
+
+      .alterTools {
+        display: grid;
+        gap: 10px;
+        grid-template-columns: 1fr 100px;
+        width: 100%;
+      }
     }
   }
 }
