@@ -11,7 +11,7 @@ const fs = require("fs");
   headers:请求头
   path:保存文件夹路径
 */
-function getVideo(urlData, i, index, urlPrefix, headers, path) {
+function getVideo(urlData, i, index, urlPrefix, headers, path, docPath) {
   return new Promise(async (resolve, reject) => {
     const appPath = __dirname + `../../../electron/`
 
@@ -32,12 +32,12 @@ function getVideo(urlData, i, index, urlPrefix, headers, path) {
         }
         if (i < urlData.length) {
           try {
-            const dataPath = appPath + `/data/data${index}.json`
+            const dataPath = docPath + `/data/data${index}.json`
             let data = fs.readFileSync(dataPath, 'utf-8')
             data = JSON.parse(data)
             data.push(i)
             fs.writeFileSync(dataPath, JSON.stringify(data), 'utf-8')
-            await getVideo(urlData, ++i, index, urlPrefix, headers, path);
+            await getVideo(urlData, ++i, index, urlPrefix, headers, path, docPath);
           } catch (error) {
             reject(error); // 将错误传递给 Promise 的拒绝处理
           }

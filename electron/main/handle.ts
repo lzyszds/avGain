@@ -253,9 +253,10 @@ export class WindowManager {
     const that = this
     return new Promise(async (resolve, reject) => {
       const appPath = __dirname + `../../../electron/`
+      const docPath = path.join(this.app.getPath('documents'), 'javPlayer')
       //清除进度条数据
-      fs.readdirSync(appPath + '/data').forEach(file => {
-        fs.writeFileSync(appPath + '/data/' + file, '[]', 'utf-8')
+      fs.readdirSync(docPath + '/data').forEach(file => {
+        fs.writeFileSync(docPath + '/data/' + file, '[]', 'utf-8')
       })
       //获取解构子进程前端传入的参数
       let { resource, name, url, thread, downPath, previewPath, coverPath, videoPath } = arg
@@ -281,7 +282,7 @@ export class WindowManager {
 
       that.downloadPlanArr = countArr
       let isFirstCertificate = false
-      getVideo(countArr[0], 0, 0, urlPrefix, headers, downPath).then()
+      getVideo(countArr[0], 0, 0, urlPrefix, headers, downPath, docPath).then()
         .catch((e: any) => {
           if (e.indexOf('unable to verify the first certificate') != -1) {
             isFirstCertificate = true
@@ -300,11 +301,13 @@ export class WindowManager {
         const seprateThread = new Worker(appPath + `/seprate/seprateThread${i}.js`);
         seprateThread.on("message", async () => {
           ++downLoadPlan
+          console.log(`lzy  downLoadPlan:`, downLoadPlan, thread)
+
           //如果当前卡住在15个线程以后，等待5分钟后，
           //如果还是没有下载完毕，就合并，不管有没有下载完毕
           timer && clearTimeout(timer)
           timer = setTimeout(() => {
-            if (downLoadPlan >= 15) {
+            if (downLoadPlan >= thread - 3) {
               merge(name, downPath, videoPath, thread).then(resultext => {
                 if (resultext === '合成成功') {
                   // res.send('合体成功，但是有部分视频没有下载完全')
@@ -327,7 +330,7 @@ export class WindowManager {
             })
           }
         });
-        seprateThread.postMessage({ urlData: countArr[i], i, headers, urlPrefix, downPath });
+        seprateThread.postMessage({ urlData: countArr[i], i, headers, urlPrefix, downPath, docPath });
       }
     })
   }
@@ -338,14 +341,18 @@ export class WindowManager {
 
   //处理逻辑getDownloadSpeed
   private onGetDownloadSpeed(event: Electron.IpcMainInvokeEvent, arg: any) {
-    const appPath = __dirname + `../../../electron/`
+    const docPath = path.join(this.app.getPath('documents'), 'javPlayer')
     let speedValue = 0
     //清除进度条数据
-    fs.readdirSync(appPath + '/data').forEach((file) => {
-      const arr = fs.readFileSync(appPath + '/data/' + file, 'utf-8')
+    fs.readdirSync(docPath + '/data').forEach((file) => {
+      const arr = fs.readFileSync(docPath + '/data/' + file, 'utf-8')
       //如果内容为空则return
       if (arr === '[]') return
-      speedValue += JSON.parse(arr).length
+      try {
+        speedValue += JSON.parse(arr).length
+      } catch (e) {
+        console.log('e:', e);
+      }
     })
     let sums = 0
     this.downloadPlanArr.forEach(element => {

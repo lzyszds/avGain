@@ -1,5 +1,6 @@
 import fs from 'fs'
 import path, { join } from 'node:path'
+import os from 'os'
 
 //存储文件时先判断当前路径是否存在文件夹，不存在先创建
 export function mkdirsSync(dirname) {
@@ -25,6 +26,29 @@ export function mkdirsSync(dirname) {
 export const createSystemStore = (app) => {
   const systemStore = join(app.getPath('documents'), 'javPlayer')
   mkdirsSync(systemStore)
+  //创建data下载进度文件夹
+  if (!fs.existsSync(join(systemStore, 'data'))) {
+    mkdirsSync(join(systemStore, 'data'))
+    for (let i = 0; i < 20; i++) {
+      const documentsPath = path.join(os.homedir(), 'Documents');
+      const docPath = path.join(documentsPath, 'javPlayer')
+      try {
+        fs.writeFile(docPath + `/data/data${i}.json`, `[]`, (err) => {
+          if (err) {
+            console.log(err);
+            throw err;
+          }
+          console.log(`data${i}.json创建成功`);
+        })
+      } catch (e) {
+        //将文件夹data删除后重新创建
+        fs.rmdirSync(join(systemStore, 'data'), { recursive: true });
+        createSystemStore(app)
+      }
+    }
+  }
+
+
   //创建系统存储文件夹 如果不存在 则创建 并写入文件
   if (!fs.existsSync(join(systemStore, 'storeLog.json'))) {
     fs.writeFileSync(join(systemStore, 'storeLog.json'), `{

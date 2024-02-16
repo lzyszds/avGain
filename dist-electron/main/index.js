@@ -12,6 +12,7 @@ const require$$0 = require("events");
 const fs$1 = require("fs");
 const path$1 = require("path");
 const https = require("https");
+const os = require("os");
 const elementPlus = require("element-plus");
 const axios = require("axios");
 const worker_threads = require("worker_threads");
@@ -716,6 +717,25 @@ function mkdirsSync(dirname) {
 const createSystemStore = (app) => {
   const systemStore = path.join(app.getPath("documents"), "javPlayer");
   mkdirsSync(systemStore);
+  if (!fs$1.existsSync(path.join(systemStore, "data"))) {
+    mkdirsSync(path.join(systemStore, "data"));
+    for (let i = 0; i < 20; i++) {
+      const documentsPath = path.join(os.homedir(), "Documents");
+      const docPath = path.join(documentsPath, "javPlayer");
+      try {
+        fs$1.writeFile(docPath + `/data/data${i}.json`, `[]`, (err) => {
+          if (err) {
+            console.log(err);
+            throw err;
+          }
+          console.log(`data${i}.json创建成功`);
+        });
+      } catch (e) {
+        fs$1.rmdirSync(path.join(systemStore, "data"), { recursive: true });
+        createSystemStore(app);
+      }
+    }
+  }
   if (!fs$1.existsSync(path.join(systemStore, "storeLog.json"))) {
     fs$1.writeFileSync(path.join(systemStore, "storeLog.json"), `{
       "coverPath": "L:/av/public/cover",
@@ -768,9 +788,9 @@ function quickSortByTimestamp(arr, key, isIncremental = true) {
 }
 const superagent = require("superagent");
 const fs = require("fs");
-function getVideo(urlData, i, index, urlPrefix, headers, path2) {
+function getVideo(urlData, i, index, urlPrefix, headers, path2, docPath) {
   return new Promise(async (resolve, reject) => {
-    const appPath = __dirname + `../../../electron/`;
+    __dirname + `../../../electron/`;
     let resa;
     try {
       resa = await superagent.get(urlPrefix + urlData[i]).set(headers);
@@ -782,12 +802,12 @@ function getVideo(urlData, i, index, urlPrefix, headers, path2) {
         }
         if (i < urlData.length) {
           try {
-            const dataPath = appPath + `/data/data${index}.json`;
+            const dataPath = docPath + `/data/data${index}.json`;
             let data = fs.readFileSync(dataPath, "utf-8");
             data = JSON.parse(data);
             data.push(i);
             fs.writeFileSync(dataPath, JSON.stringify(data), "utf-8");
-            await getVideo(urlData, ++i, index, urlPrefix, headers, path2);
+            await getVideo(urlData, ++i, index, urlPrefix, headers, path2, docPath);
           } catch (error) {
             reject(error);
           }
@@ -1031,8 +1051,9 @@ class WindowManager {
     const that = this;
     return new Promise(async (resolve, reject) => {
       const appPath = __dirname + `../../../electron/`;
-      fs$1.readdirSync(appPath + "/data").forEach((file) => {
-        fs$1.writeFileSync(appPath + "/data/" + file, "[]", "utf-8");
+      const docPath = path$1.join(this.app.getPath("documents"), "javPlayer");
+      fs$1.readdirSync(docPath + "/data").forEach((file) => {
+        fs$1.writeFileSync(docPath + "/data/" + file, "[]", "utf-8");
       });
       let { resource, name, url: url2, thread, downPath, previewPath, coverPath, videoPath } = arg;
       const headers = getHeaders(resource);
@@ -1054,7 +1075,7 @@ class WindowManager {
       const countArr = splitArrayIntoEqualChunks(dataArr, thread);
       that.downloadPlanArr = countArr;
       let isFirstCertificate = false;
-      getVideo(countArr[0], 0, 0, urlPrefix, headers, downPath).then().catch((e) => {
+      getVideo(countArr[0], 0, 0, urlPrefix, headers, downPath, docPath).then().catch((e) => {
         if (e.indexOf("unable to verify the first certificate") != -1) {
           isFirstCertificate = true;
         }
@@ -1070,9 +1091,10 @@ class WindowManager {
         const seprateThread = new worker_threads.Worker(appPath + `/seprate/seprateThread${i}.js`);
         seprateThread.on("message", async () => {
           ++downLoadPlan;
+          console.log(`lzy  downLoadPlan:`, downLoadPlan, thread);
           timer && clearTimeout(timer);
           timer = setTimeout(() => {
-            if (downLoadPlan >= 15) {
+            if (downLoadPlan >= thread - 3) {
               merge(name, downPath, videoPath, thread).then((resultext) => {
                 if (resultext === "合成成功") {
                   getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
@@ -1091,7 +1113,7 @@ class WindowManager {
             });
           }
         });
-        seprateThread.postMessage({ urlData: countArr[i], i, headers, urlPrefix, downPath });
+        seprateThread.postMessage({ urlData: countArr[i], i, headers, urlPrefix, downPath, docPath });
       }
     });
   }
@@ -1101,13 +1123,17 @@ class WindowManager {
   }
   //处理逻辑getDownloadSpeed
   onGetDownloadSpeed(event, arg) {
-    const appPath = __dirname + `../../../electron/`;
+    const docPath = path$1.join(this.app.getPath("documents"), "javPlayer");
     let speedValue = 0;
-    fs$1.readdirSync(appPath + "/data").forEach((file) => {
-      const arr = fs$1.readFileSync(appPath + "/data/" + file, "utf-8");
+    fs$1.readdirSync(docPath + "/data").forEach((file) => {
+      const arr = fs$1.readFileSync(docPath + "/data/" + file, "utf-8");
       if (arr === "[]")
         return;
-      speedValue += JSON.parse(arr).length;
+      try {
+        speedValue += JSON.parse(arr).length;
+      } catch (e) {
+        console.log("e:", e);
+      }
     });
     let sums = 0;
     this.downloadPlanArr.forEach((element) => {
