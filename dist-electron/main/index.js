@@ -1059,7 +1059,7 @@ class WindowManager {
       const headers = getHeaders(resource);
       name = name.replace("[无码破解]", "");
       const designation = getIdNumber(name);
-      name = name.replace(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-][\·\・]/g, "").replaceAll(" ", "");
+      name = name.replace(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, "").replaceAll(/[\·\・\●\/]/g, "").replaceAll(" ", "");
       let downLoadPlan = 0, timer = null;
       const videoName = url2.split("/")[url2.split("/").length - 1].split(".")[0];
       const urlPrefix = url2.split("/").splice(0, url2.split("/").length - 1).join("/") + "/";

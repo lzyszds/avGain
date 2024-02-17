@@ -36,7 +36,7 @@
           <el-input v-model="sizeForm.name" />
         </el-form-item>
         <el-form-item label="下载地址">
-          <el-input v-model="sizeForm.url" :autosize="{ minRows: 3, maxRows: 5 }" type="textarea" />
+          <el-input v-model="sizeForm.url" :autosize="{ minRows: 3, maxRows: 5 }" type="textarea" spellcheck="false" />
         </el-form-item>
         <el-form-item label="下载线程">
           <el-input v-model="sizeForm.thread" type="number" max="20" min="1" />
@@ -63,13 +63,13 @@
           <p>{{ index + 1 }}</p>
           <el-form-item label="番号名字">
             <div class="alterTools">
-              <el-input v-model="item.name" />
+              <el-input v-model="item.name" spellcheck="false" />
               <el-button type="primary" @click="useAlternate(item)">更换备选</el-button>
             </div>
           </el-form-item>
           <el-form-item label="下载地址">
             <div class="alterTools">
-              <el-input v-model="item.url" />
+              <el-input v-model="item.url" spellcheck="false" />
               <el-button type="primary" @click="() => alternateArr.splice(index, 1)">删除</el-button>
             </div>
           </el-form-item>
@@ -92,6 +92,7 @@
 import { reactive, ref } from 'vue'
 import { ElNotification } from 'element-plus'
 import LzyIcon from '@/components/LzyIcon.vue';
+import { useStorage } from '@vueuse/core'
 const el = window.myElectron
 
 const downPath = await el.onHandleStoreData("downloadPath")
@@ -100,13 +101,13 @@ const coverPath = await el.onHandleStoreData("coverPath")
 const videoPath = await el.onHandleStoreData("videoPath")
 const rawData = await el.onHandleStoreData('downloadHistory');
 const downloadHistory = ref(JSON.parse(rawData || '[]'));
-const sizeForm = reactive({
+const sizeForm = useStorage('sizeForm', {
   resource: 'SuperJav',
   name: '',
   url: '',
   thread: 10,
 })
-const alternateArr = reactive([
+const alternateArr = useStorage('alternateArr', [
   { name: '', url: '' }
 ])
 
@@ -116,16 +117,12 @@ const progress = ref<number[]>([])
 const fileDirlist = ref<any>([])
 const speedDownload = ref<string>()
 
-const DownLoadForm = await el.onHandleStoreData('DownLoadForm')
-if (DownLoadForm) {
-  Object.assign(sizeForm, JSON.parse(DownLoadForm || ''))
-}
 const activeNames = ref(['1'])
 
 
 async function onSubmit() {
 
-  if (!hasName(sizeForm.name)) {
+  if (!hasName(sizeForm.value.name)) {
     el.onHandleStoreData({ DownLoadForm: JSON.stringify({ ...sizeForm }) })
     downloadHistory.value.unshift({ ...sizeForm })
     el.onHandleStoreData({ downloadHistory: JSON.stringify(downloadHistory.value) })
@@ -133,22 +130,22 @@ async function onSubmit() {
   let timer
 
   el.downloadVideoEvent({
-    ...sizeForm, downPath, previewPath, coverPath, videoPath
+    ...sizeForm.value, downPath, previewPath, coverPath, videoPath
   }).then(res => {
     console.log(`lzy  res:`, res)
     ElNotification({
       title: '下载提示：',
-      message: res + ':' + sizeForm.name,
+      message: res + ':' + sizeForm.value.name,
       position: 'bottom-left',
       duration: 0
     })
     clearInterval(timer)
     setTimeout(() => {
       //将备选内容第一个赋值给sizeForm 并删除备选内容 然后开始下载下一个
-      if (alternateArr.length > 0) {
-        sizeForm.name = alternateArr[0].name
-        sizeForm.url = alternateArr[0].url
-        alternateArr.splice(0, 1)
+      if (alternateArr.value.length > 0) {
+        sizeForm.value.name = alternateArr[0].name
+        sizeForm.value.url = alternateArr[0].url
+        alternateArr.value.splice(0, 1)
         onSubmit()
       }
     }, 10000)
@@ -209,7 +206,6 @@ const speedDownloadHanlde = () => {
   fileDirlist.value.forEach((res) => {
     newSize += res.state.size
   })
-  console.log(newSize, oldSize);
   speedDownload.value = newSize == oldSize ? speedDownload.value : formatFileSize((newSize - oldSize) * 2)
   oldSize = newSize
 }
@@ -224,12 +220,12 @@ const getDownloadSize = () => {
 }
 //添加备选 
 const addAlternate = () => {
-  alternateArr.push({ name: '', url: '' })
+  alternateArr.value.push({ name: '', url: '' })
 }
 //使用备选
 const useAlternate = (item) => {
-  sizeForm.name = item.name
-  sizeForm.url = item.url
+  sizeForm.value.name = item.name
+  sizeForm.value.url = item.url
 }
 </script>
 

@@ -265,7 +265,9 @@ export class WindowManager {
       //截取番号出来
       const designation = getIdNumber(name)
       //替换名字非法字符 保留日语和中文字符，并删除其他非字母数字字符
-      name = name.replace(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-][\·\・]/g, '').replaceAll(' ', '')
+      name = name.replace(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, '')
+        .replaceAll(/[\·\・\●\/]/g, '')
+        .replaceAll(' ', '')
       //下载计算器 用于计算下载进度
       let downLoadPlan = 0, timer: any = null
       //计算需要下载的文件 url是一个m3u8文件
