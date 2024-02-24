@@ -29,7 +29,7 @@ export const createSystemStore = (app) => {
   //创建data下载进度文件夹
   if (!fs.existsSync(join(systemStore, 'data'))) {
     mkdirsSync(join(systemStore, 'data'))
-    for (let i = 0; i < 20; i++) {
+    for (let i = 1; i <= 20; i++) {
       const documentsPath = path.join(os.homedir(), 'Documents');
       const docPath = path.join(documentsPath, 'javPlayer')
       try {

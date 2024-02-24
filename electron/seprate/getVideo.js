@@ -13,7 +13,6 @@ const fs = require("fs");
 */
 function getVideo(urlData, i, index, urlPrefix, headers, path, docPath) {
   return new Promise(async (resolve, reject) => {
-    const appPath = __dirname + `../../../electron/`
 
     let resa
     try {
@@ -39,6 +38,11 @@ function getVideo(urlData, i, index, urlPrefix, headers, path, docPath) {
             fs.writeFileSync(dataPath, JSON.stringify(data), 'utf-8')
             await getVideo(urlData, ++i, index, urlPrefix, headers, path, docPath);
           } catch (error) {
+            if (error.message && error.message.indexOf('no such file or directory') > -1) {
+              //创建文件
+              fs.writeFileSync(docPath + `/data/data${index}.json`, '[]', 'utf-8')
+              return await getVideo(urlData, i, index, urlPrefix, headers, path, docPath);
+            }
             reject(error); // 将错误传递给 Promise 的拒绝处理
           }
         } else { // 提示用户下载完成

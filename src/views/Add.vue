@@ -1,8 +1,11 @@
 <template>
-  <div style="display: grid;grid-template-columns: 22% 1fr 24%;padding:10px 0">
+  <div style="display: grid; grid-template-columns: 22% 1fr 24%; padding: 10px 0">
     <ul class="dirState">
       <li>
-        <lzy-icon name="solar:folder-with-files-broken" style="width: 12px;vertical-align: -6px;" />
+        <lzy-icon
+          name="solar:folder-with-files-broken"
+          style="width: 12px; vertical-align: -6px"
+        />
         {{ downPath }}
       </li>
       <li class="dirContent" v-for="(item, index) in fileDirlist" :key="index">
@@ -13,19 +16,36 @@
         <span>{{ formatFileSize(item.state.size) }}</span>
       </li>
       <li class="tools">
-        <LzyBtn :handle="getDownloadListContent" title="刷新" icon="ant-design:reload-outlined"></LzyBtn>
-        <LzyBtn :handle="deleteDirFile" title="清空" icon="ant-design:delete-twotone"></LzyBtn>
-        <LzyBtn :title="getDownloadSize()" icon="ic:baseline-insert-chart-outlined"></LzyBtn>
-
+        <LzyBtn
+          :handle="getDownloadListContent"
+          title="刷新"
+          icon="ant-design:reload-outlined"
+        ></LzyBtn>
+        <LzyBtn
+          :handle="deleteDirFile"
+          title="清空"
+          icon="ant-design:delete-twotone"
+        ></LzyBtn>
+        <LzyBtn
+          :title="getDownloadSize()"
+          icon="ic:baseline-insert-chart-outlined"
+        ></LzyBtn>
+        <LzyBtn :handle="onMergeVideo" title="合成" icon="gg:merge-horizontal"></LzyBtn>
       </li>
     </ul>
     <div class="addMain">
-      <h1 style="text-align: center;padding-bottom: 20px;">
+      <h1 style="text-align: center; padding-bottom: 20px">
         欢迎使用
-        <img src="../../public/logo.png" width="40" height="40">
+        <img src="../../public/logo.png" width="40" height="40" />
         <span class="av">AudioVideo_Gain</span>
       </h1>
-      <el-form ref="form" :model="sizeForm" label-width="auto" label-position="left" size="large">
+      <el-form
+        ref="form"
+        :model="sizeForm"
+        label-width="auto"
+        label-position="left"
+        size="large"
+      >
         <el-form-item label="资源来路">
           <el-radio-group v-model="sizeForm.resource">
             <el-radio border label="SuperJav" />
@@ -36,28 +56,46 @@
           <el-input v-model="sizeForm.name" />
         </el-form-item>
         <el-form-item label="下载地址">
-          <el-input v-model="sizeForm.url" :autosize="{ minRows: 3, maxRows: 5 }" type="textarea" spellcheck="false" />
+          <el-input
+            v-model="sizeForm.url"
+            :autosize="{ minRows: 3, maxRows: 5 }"
+            type="textarea"
+            spellcheck="false"
+          />
         </el-form-item>
         <el-form-item label="下载线程">
           <el-input v-model="sizeForm.thread" type="number" max="20" min="1" />
         </el-form-item>
         <el-form-item class="sumbit">
           <!-- v-show="speedDownload" -->
-          <span style="text-align: left;">{{ speedDownload }}/s</span>
+          <span style="text-align: left">{{ speedDownload }}/s</span>
           <el-progress :text-inside="true" :percentage="percentage" color="#fe638f" />
           <span>{{ progress[0] }}/{{ progress[1] }}</span>
           <button class="button download" @click="onSubmit" type="button">
             <span class="button__text">开始下载</span>
-            <span class="button__icon"><svg class="svg" fill="none" height="24" stroke="currentColor"
-                stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24"
-                xmlns="http://www.w3.org/2000/svg">
+            <span class="button__icon">
+              <svg
+                class="svg"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
                 <line x1="12" x2="12" y1="5" y2="19"></line>
                 <line x1="5" x2="19" y1="12" y2="12"></line>
-              </svg></span>
+              </svg>
+            </span>
           </button>
         </el-form-item>
       </el-form>
-      <el-button @click="addAlternate">添加备选</el-button>
+      <el-button @click="addAlternate">
+        添加备选(备选内容会在下载完成后进行按顺序下载)
+      </el-button>
       <div class="alternateList">
         <el-card shadow="never" v-for="(item, index) in alternateArr" :key="index">
           <p>{{ index + 1 }}</p>
@@ -70,7 +108,9 @@
           <el-form-item label="下载地址">
             <div class="alterTools">
               <el-input v-model="item.url" spellcheck="false" />
-              <el-button type="primary" @click="() => alternateArr.splice(index, 1)">删除</el-button>
+              <el-button type="primary" @click="() => alternateArr.splice(index, 1)">
+                删除
+              </el-button>
             </div>
           </el-form-item>
         </el-card>
@@ -78,7 +118,12 @@
     </div>
     <div class="footer">
       <el-collapse class="collapse" v-model="activeNames" :accordion="true">
-        <el-collapse-item v-for="( item, index ) in  downloadHistory " :key="index" :title="item.name" :name="index">
+        <el-collapse-item
+          v-for="(item, index) in downloadHistory"
+          :key="index"
+          :title="item.name"
+          :name="index"
+        >
           <div>
             {{ item.url }}
           </div>
@@ -89,106 +134,146 @@
 </template>
 
 <script lang="ts" setup>
-import { reactive, ref } from 'vue'
-import { ElNotification } from 'element-plus'
-import LzyIcon from '@/components/LzyIcon.vue';
-import { useStorage } from '@vueuse/core'
-const el = window.myElectron
+import { reactive, ref } from "vue";
+import { ElNotification } from "element-plus";
+import LzyIcon from "@/components/LzyIcon.vue";
+import { useStorage } from "@vueuse/core";
+const el = window.myElectron;
 
-const downPath = await el.onHandleStoreData("downloadPath")
-const previewPath = await el.onHandleStoreData("previewPath")
-const coverPath = await el.onHandleStoreData("coverPath")
-const videoPath = await el.onHandleStoreData("videoPath")
-const rawData = await el.onHandleStoreData('downloadHistory');
-const downloadHistory = ref(JSON.parse(rawData || '[]'));
-const sizeForm = useStorage('sizeForm', {
-  resource: 'SuperJav',
-  name: '',
-  url: '',
+const downPath = await el.onHandleStoreData("downloadPath");
+const previewPath = await el.onHandleStoreData("previewPath");
+const coverPath = await el.onHandleStoreData("coverPath");
+const videoPath = await el.onHandleStoreData("videoPath");
+const rawData = await el.onHandleStoreData("downloadHistory");
+const downloadHistory = ref(JSON.parse(rawData || "[]"));
+console.log(`lzy  downloadHistory.value:`, downloadHistory.value);
+//将历史记录里面的空数据删除
+downloadHistory.value = downloadHistory.value.filter((res) => res.name);
+
+const sizeForm = useStorage("sizeForm", {
+  resource: "SuperJav",
+  name: "",
+  url: "",
   thread: 10,
-})
-const alternateArr = useStorage('alternateArr', [
-  { name: '', url: '' }
-])
+});
+const alternateArr = useStorage("alternateArr", [{ name: "", url: "" }]);
 
-const percentage = ref(0)
-const progress = ref<number[]>([])
+const percentage = ref(0);
+const progress = ref<number[]>([]);
 
-const fileDirlist = ref<any>([])
-const speedDownload = ref<string>()
+const fileDirlist = ref<any>([]);
+const speedDownload = ref<string>();
 
-const activeNames = ref(['1'])
-
+const activeNames = ref(["1"]);
 
 async function onSubmit() {
+  const { name, url } = sizeForm.value;
+  if (!name || !url) return;
+  ElNotification({
+    title: "下载提示：",
+    message: "开始下载：" + name,
+    type: "success",
+  });
 
-  if (!hasName(sizeForm.value.name)) {
-    el.onHandleStoreData({ DownLoadForm: JSON.stringify({ ...sizeForm }) })
-    downloadHistory.value.unshift({ ...sizeForm })
-    el.onHandleStoreData({ downloadHistory: JSON.stringify(downloadHistory.value) })
+  const storeData = (key, value) => {
+    el.onHandleStoreData({ [key]: JSON.stringify(value) });
+  };
+
+  if (!hasName(name)) {
+    // 将对象转换为JSON字符串，并通过onHandleStoreData方法传递给el
+    storeData("DownLoadForm", { ...sizeForm.value });
+    downloadHistory.value.unshift({ ...sizeForm.value });
+    storeData("downloadHistory", downloadHistory.value);
   }
-  let timer
 
-  el.downloadVideoEvent({
-    ...sizeForm.value, downPath, previewPath, coverPath, videoPath
-  }).then(res => {
-    console.log(`lzy  res:`, res)
-    ElNotification({
-      title: '下载提示：',
-      message: res + ':' + sizeForm.value.name,
-      position: 'bottom-left',
-      duration: 0
-    })
-    clearInterval(timer)
-    setTimeout(() => {
-      //将备选内容第一个赋值给sizeForm 并删除备选内容 然后开始下载下一个
-      if (alternateArr.value.length > 0) {
-        sizeForm.value.name = alternateArr[0].name
-        sizeForm.value.url = alternateArr[0].url
-        alternateArr.value.splice(0, 1)
-        onSubmit()
-      }
-    }, 10000)
-  })
+  let timer;
   timer = setInterval(async () => {
-    const arr = await el.getDownloadSpeed()
-    percentage.value = Number((arr[0] / arr[1] * 100).toFixed(2))
-    progress.value = [arr[0], arr[1]]
-    getDownloadListContent()
-    speedDownloadHanlde()
-  }, 500)
+    const [a, b] = await el.getDownloadSpeed();
+    console.log(`lzy  a, b:`, a, b);
+    percentage.value = Number(((a / b) * 100).toFixed(2));
+    progress.value = [a, b];
+
+    // 更新下载列表内容
+    getDownloadListContent();
+    updateSpeedDownload();
+  }, 500);
+  try {
+    // 使用 await 处理 promise
+    const res = await el.downloadVideoEvent({
+      ...sizeForm.value,
+      downPath,
+      previewPath,
+      coverPath,
+      videoPath,
+    });
+
+    ElNotification({
+      title: "下载提示：",
+      message: res + ":" + name,
+      position: "bottom-left",
+      duration: 10000,
+    });
+
+    // 将备选内容第一个赋值给sizeForm 并删除备选内容 然后开始下载下一个
+    if (alternateArr.value.length > 0) {
+      sizeForm.value.name = alternateArr.value[0].name;
+      sizeForm.value.url = alternateArr.value[0].url;
+      alternateArr.value.splice(0, 1);
+
+      const timerItem = setInterval(() => {
+        if (getDownloadSize() == "0.00B") {
+          clearInterval(timer);
+          onSubmit();
+          clearInterval(timerItem);
+        }
+      }, 1000);
+    }
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 function hasName(name) {
-  let result = false
+  let result = false;
   downloadHistory.value.forEach((res) => {
     if (res.name == name) {
-      result = true
+      result = true;
     }
-  })
-  return result
+  });
+  return result;
 }
 //获取下载目录的内容，将其展示在系统上
-getDownloadListContent()
+getDownloadListContent();
 async function getDownloadListContent() {
-  fileDirlist.value = await el.getDownloadListContent(downPath)
+  fileDirlist.value = await el.getDownloadListContent(downPath);
+  //将其中的数据根据name进行排序
+  fileDirlist.value.sort((a, b) => {
+    return a.name.replace(/\.ts/g, "") > b.name.replace(/\.ts/g, "") ? 1 : -1;
+  });
 }
-
+//清空下载路径
 function deleteDirFile() {
-  el.deleteDirFile(downPath)
-  getDownloadListContent()
+  el.deleteDirFile(downPath);
+  getDownloadListContent();
 }
-
-
+//合并视频（以解决视频不合并的问题）
+async function onMergeVideo() {
+  const { name, thread } = sizeForm.value;
+  const msg = await el.onMergeVideo({
+    name,
+    thread,
+    downPath,
+    videoPath,
+  });
+  ElNotification({
+    title: "下载提示：",
+    message: msg,
+    position: "bottom-left",
+    duration: 0,
+  });
+}
 function formatFileSize(fileSize: any) {
-
-  const units = [
-    'B',
-    'KB',
-    'MB',
-    'GB',
-    'TB'
-  ];
+  const units = ["B", "KB", "MB", "GB", "TB"];
   let index = 0;
 
   while (fileSize >= 1024 && index < units.length - 1) {
@@ -199,34 +284,40 @@ function formatFileSize(fileSize: any) {
   return fileSize.toFixed(2) + units[index];
 }
 
-let oldSize = 0
-//获取下载速度
-const speedDownloadHanlde = () => {
-  let newSize = 0
+let oldSize = 0;
+// 更新速度下载值的函数
+const updateSpeedDownload = () => {
+  let totalSize = 0;
   fileDirlist.value.forEach((res) => {
-    newSize += res.state.size
-  })
-  speedDownload.value = newSize == oldSize ? speedDownload.value : formatFileSize((newSize - oldSize) * 2)
-  oldSize = newSize
-}
+    totalSize += res.state.size;
+  });
+
+  // 如果新的总大小与旧的总大小相同，则不更新速度下载值
+  if (totalSize === oldSize) {
+    return;
+  }
+  // 格式化文件大小并更新速度下载值
+  speedDownload.value = formatFileSize((totalSize - oldSize) * 2);
+  oldSize = totalSize;
+};
 
 //获取总下载内容大小
 const getDownloadSize = () => {
-  let newSize = 0
+  let newSize = 0;
   fileDirlist.value.forEach((res) => {
-    newSize += res.state.size
-  })
-  return formatFileSize(newSize)
-}
-//添加备选 
+    newSize += res.state.size;
+  });
+  return formatFileSize(newSize);
+};
+//添加备选
 const addAlternate = () => {
-  alternateArr.value.push({ name: '', url: '' })
-}
+  alternateArr.value.push({ name: "", url: "" });
+};
 //使用备选
 const useAlternate = (item) => {
-  sizeForm.value.name = item.name
-  sizeForm.value.url = item.url
-}
+  sizeForm.value.name = item.name;
+  sizeForm.value.url = item.url;
+};
 </script>
 
 <style scoped lang="scss">
@@ -249,7 +340,6 @@ ul {
   font-size: 17px;
 
   li {
-
     &:first-child {
       font-size: 12px;
       border-bottom: 1px solid #eee;
@@ -277,15 +367,9 @@ ul {
       grid-template-columns: 1fr 1fr;
       grid-template-rows: 1fr 1fr;
       gap: 10px;
-
-      button:nth-child(3) {
-        grid-column: 1 / 3;
-      }
     }
   }
-
 }
-
 
 .addMain {
   height: 93%;
@@ -344,7 +428,7 @@ ul {
 
       p {
         text-align: center;
-        font-family: 'dindin';
+        font-family: "dindin";
         font-size: 2rem;
         margin: 0;
         grid-row: 1 / 3;

@@ -22,7 +22,9 @@ const validChannels = [
   //创建文件夹
   'onCreateDir', 
   //删除视频文件
-  'onHandleDeleteFile'
+  'onHandleDeleteFile',
+  //合并视频
+  'onMergeVideo',
 ]
 
 const myElectron = {}

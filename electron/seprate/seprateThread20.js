@@ -1,10 +1,9 @@
-const fs = require('fs')
 
-let template = `
 const { parentPort } = require("worker_threads");
 const getVideo = require("./getVideo.js");
 parentPort.on("message", (limit) => {
   const { urlData, index, urlPrefix, headers, downPath, docPath } = limit;
+
   if (!urlPrefix || !urlData) {
     return parentPort.postMessage({ msg: '1', result: '下载完成' })
   }
@@ -15,21 +14,7 @@ parentPort.on("message", (limit) => {
         parentPort.postMessage(index)
       })
   } catch (e) {
+    console.error(e)
     parentPort.postMessage(e)
   }
 });
-`
-// 在文件夹seprate中创建多个文件，每个文件都是一个线程
-for (let i = 1; i <= 20; i++) {
-
-  fs.writeFile(`./electron/seprate/seprateThread${i}.js`, template, (err) => {
-    if (err) {
-      console.log(err);
-      throw err;
-    }
-    console.log(`seprateThread${i}.js创建成功`);
-  })
-}
-
-
-

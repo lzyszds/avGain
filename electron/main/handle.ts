@@ -6,8 +6,6 @@ import https from 'https'
 import { mkdirsSync, createSystemStore, formatFileSize, quickSortByTimestamp } from '../utils/utils'; // 假设您有一个名为 'utils' 的模块用于创建目录
 import { dayjs } from 'element-plus'
 import axios from 'axios'
-import getVideo from '../utils/getVideo'
-// const getVideo = require("");
 import { Worker } from "worker_threads";
 import { merge } from '../utils/merge'
 
@@ -56,6 +54,7 @@ export class WindowManager {
     this.registerDeleteDirFile()
     this.registerCreateDir()
     this.registerHandleDeleteFile()
+    this.registeronMergeVideo()
   }
 
   // 处理窗口操作请求
@@ -248,118 +247,221 @@ export class WindowManager {
     ipcMain.handle('onGetListData', this.onGetListData.bind(this));
   }
 
-  //处理downloadVideoEvent
+  // 处理在Electron应用中的视频下载事件的函数。
   private onDownloadVideoEvent(event: Electron.IpcMainInvokeEvent, arg: any) {
-    const that = this
+    const that = this;
     return new Promise(async (resolve, reject) => {
-      const appPath = __dirname + `../../../electron/`
-      const docPath = path.join(this.app.getPath('documents'), 'javPlayer')
-      //清除进度条数据
+      // 设置应用和文档路径。
+      const appPath = path.join(__dirname, `../../electron`);
+      const docPath = path.join(this.app.getPath('documents'), 'javPlayer');
+
+      // 清除进度条数据。
       fs.readdirSync(docPath + '/data').forEach(file => {
-        fs.writeFileSync(docPath + '/data/' + file, '[]', 'utf-8')
-      })
-      //获取解构子进程前端传入的参数
-      let { resource, name, url, thread, downPath, previewPath, coverPath, videoPath } = arg
-      const headers = getHeaders(resource)  //分辨->获取请求头
-      name = name.replace('[无码破解]', '')
+        fs.writeFileSync(docPath + '/data/' + file, '[]', 'utf-8');
+      });
+
+      // 解构从前端进程传入的参数。
+      let { resource, name, url, thread, downPath, previewPath, coverPath, videoPath } = arg;
+      // 获取HTTP请求头信息。
+      const headers = getHeaders(resource);
+
+      // 清洗和处理视频名称。
+      name = sanitizeVideoName(name);
+
+      // 初始化下载进度跟踪变量。
+      let downLoadPlan = 0, timer: any = null;
+
       //截取番号出来
-      const designation = getIdNumber(name)
-      //替换名字非法字符 保留日语和中文字符，并删除其他非字母数字字符
-      name = name.replace(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, '')
-        .replaceAll(/[\·\・\●\/]/g, '')
-        .replaceAll(' ', '')
-      //下载计算器 用于计算下载进度
-      let downLoadPlan = 0, timer: any = null
-      //计算需要下载的文件 url是一个m3u8文件
-      const videoName = url.split('/')[url.split('/').length - 1].split('.')[0]
-      const urlPrefix = url.split('/').splice(0, url.split('/').length - 1).join('/') + '/'
-      const { data: m3u8Data } = await axios(url, {
-        method: 'get', headers, httpsAgent: new https.Agent({
-          rejectUnauthorized: false  // 禁用 SSL 证书验证
-        })
-      }) as any
+      const designation = getVideoId(name)
 
-      const dataArr = m3u8Data.split('\n').filter((res: any) => res.indexOf(videoName) === 0)
-      const countArr = splitArrayIntoEqualChunks(dataArr, thread)
+      // 从M3U8 URL计算出需要下载的视频文件信息。
+      const { videoName, urlPrefix, dataArr } = await processM3u8(url, headers);
 
-      that.downloadPlanArr = countArr
-      let isFirstCertificate = false
-      getVideo(countArr[0], 0, 0, urlPrefix, headers, downPath, docPath).then()
-        .catch((e: any) => {
-          if (e.indexOf('unable to verify the first certificate') != -1) {
-            isFirstCertificate = true
-          }
-        }).finally(() => {
-          ++downLoadPlan
-        })
-
-      // await sleep(10 * 1000) //阻塞20秒
-      if (isFirstCertificate) {
+      // 检验SSL证书。
+      if (dataArr.length === 0) {
         console.log('无法验证第一个证书');
-        return resolve('无法验证第一个证书')
+        return resolve('无法验证第一个证书');
       }
-      let getCoverIndex = 0 //第几次尝试下载图片的索引
-      for (let i = 1; i < thread; i++) {
-        const seprateThread = new Worker(appPath + `/seprate/seprateThread${i}.js`);
-        seprateThread.on("message", async () => {
-          ++downLoadPlan
-          console.log(`lzy  downLoadPlan:`, downLoadPlan, thread)
+      // 将M3U8数据分割为等份，按线程数分配。
+      const countArr = splitArrayIntoEqualChunks(dataArr, thread);
 
-          //如果当前卡住在15个线程以后，等待5分钟后，
-          //如果还是没有下载完毕，就合并，不管有没有下载完毕
-          timer && clearTimeout(timer)
-          timer = setTimeout(() => {
-            if (downLoadPlan >= thread - 3) {
-              merge(name, downPath, videoPath, thread).then(resultext => {
-                if (resultext === '合成成功') {
-                  // res.send('合体成功，但是有部分视频没有下载完全')
-                  getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath)
-                  // getCoverImg(id, name, cover, getCoverIndex)//获取封面图片
-                }
-              })
-              return resolve('下载完成，但是有部分视频没有下载完全')
+      // 设置下载计划数组。
+      that.downloadPlanArr = countArr;
+
+      let getCoverIndex = 0; // 重试下载图片的索引。
+
+      // 为不同的下载线程初始化Worker线程。
+      for (let i = 0; i < thread; i++) {
+        // 创建一个新的Worker线程实例，用于处理下载任务。
+        const separateThread = new Worker(appPath + `\\seprate\\seprateThread${i + 1}.js`);
+        // 注册消息处理事件，以监听Worker线程的消息。
+        separateThread.on("message", async () => {
+          // 增加下载进度（表明一个片段已下载完成）。
+          ++downLoadPlan;
+          console.log(`完成进度：`, downLoadPlan, thread, i);
+          // 检查是否所有线程下载任务均已完成。
+          if (downLoadPlan == thread) {
+            console.log(`lzy  name:`, name)
+            // 如果所有线程完成下载，尝试合并视频片段。
+            const resultText = await merge(name, downPath, videoPath, thread);
+            console.log(`lzy  resultText:`, resultText)
+            // 如果合成成功，获取视频预览图和封面图。
+            if (resultText == '合成成功') {
+              setTimeout(() => {
+                getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
+                // 清理不需要的临时文件。
+                deleteDirFile(downPath)
+                // 完成下载任务，返回结果。
+                resolve('下载完成');
+              }, 1000 * 5)
             }
-          }, 3 * 60 * 1000)
-          if (downLoadPlan >= thread) {
-            merge(name, downPath, videoPath, thread).then(resultext => {
-              timer && clearTimeout(timer)
-              if (resultext === '合成成功') {
-                getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath)
-                // getCoverImg(id, name, cover, getCoverIndex)//获取封面图片
-                // return res.send(resultext)
-                return resolve('下载完成')
-              }
-            })
           }
+
+          // 如果下载被阻塞，设置一个超时函数来处理悬挂的下载。
+          if (timer) clearTimeout(timer);
+          timer = setTimeout(async () => {
+            // 如果大部分线程下载完成，但仍有一些未完成，尝试合并现有片段。
+            if (downLoadPlan >= thread - 3) {
+              const result = await mergeWithTimeout(name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation);
+              if (timer) clearTimeout(timer);
+              return result === '下载完成，但是有部分视频没有下载完全'
+            }
+          }, 5 * 60 * 1000); // 5分钟超时。
         });
-        seprateThread.postMessage({ urlData: countArr[i], i, headers, urlPrefix, downPath, docPath });
+
+        // 向Worker线程发送任务信息，启动下载。
+        separateThread.postMessage({
+          urlData: countArr[i],
+          index: i + 1,
+          headers: headers,
+          urlPrefix: urlPrefix,
+          downPath: downPath,
+          docPath: docPath
+        });
       }
-    })
+    });
   }
+
+
+
+  // //处理downloadVideoEvent
+  // private onDownloadVideoEvent(event: Electron.IpcMainInvokeEvent, arg: any) {
+  //   const that = this
+  //   return new Promise(async (resolve, reject) => {
+  //     const appPath = __dirname + `../../../electron/`
+  //     const docPath = path.join(this.app.getPath('documents'), 'javPlayer')
+  //     //清除进度条数据
+  //     fs.readdirSync(docPath + '/data').forEach(file => {
+  //       fs.writeFileSync(docPath + '/data/' + file, '[]', 'utf-8')
+  //     })
+  //     //获取解构子进程前端传入的参数
+  //     let { resource, name, url, thread, downPath, previewPath, coverPath, videoPath } = arg
+  //     const headers = getHeaders(resource)  //分辨->获取请求头
+  //     name = name.replace('[无码破解]', '')
+  //     //截取番号出来
+  //     const designation = getIdNumber(name)
+  //     //替换名字非法字符 保留日语和中文字符，并删除其他非字母数字字符
+  //     name = name.replaceAll(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, '')
+  //       .replaceAll(/[\·\・\●\/]/g, '')
+  //       .replaceAll(' ', '')
+  //     //下载计算器 用于计算下载进度
+  //     let downLoadPlan = 0, timer: any = null
+  //     //计算需要下载的文件 url是一个m3u8文件
+  //     const videoName = url.split('/')[url.split('/').length - 1].split('.')[0]
+  //     const urlPrefix = url.split('/').splice(0, url.split('/').length - 1).join('/') + '/'
+  //     const { data: m3u8Data } = await axios(url, {
+  //       method: 'get', headers, httpsAgent: new https.Agent({
+  //         rejectUnauthorized: false  // 禁用 SSL 证书验证
+  //       })
+  //     }) as any
+
+  //     const dataArr = m3u8Data.split('\n').filter((res: any) => res.indexOf(videoName) === 0)
+  //     const countArr = splitArrayIntoEqualChunks(dataArr, thread)
+
+  //     that.downloadPlanArr = countArr
+
+
+  //     let getCoverIndex = 0 //第几次尝试下载图片的索引
+  //     for (let i = 0; i < thread; i++) {
+  //       const seprateThread = new Worker(appPath + `/seprate/seprateThread${i + 1}.js`);
+  //       seprateThread.on("message", async () => {
+  //         ++downLoadPlan
+
+  //         //如果当前卡住在15个线程以后，等待5分钟后，
+  //         //如果还是没有下载完毕，就合并，不管有没有下载完毕
+  //         timer && clearTimeout(timer)
+  //         timer = setTimeout(async () => {
+  //           if (downLoadPlan >= thread - 3) {
+  //             const resultext = await merge(name, downPath, videoPath, thread)
+  //             timer && clearTimeout(timer)
+  //             if (resultext === '合成成功') {
+  //               // res.send('合体成功，但是有部分视频没有下载完全')
+  //               getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath)
+  //               // getCoverImg(id, name, cover, getCoverIndex)//获取封面图片
+  //               return resolve('下载完成，但是有部分视频没有下载完全')
+  //             }
+  //           }
+  //         }, 3 * 60 * 1000)
+  //         console.log(downLoadPlan == thread, downLoadPlan, thread, i)
+  //         if (downLoadPlan == thread) {
+  //           const resultext = await merge(name, downPath, videoPath, thread)
+  //           timer && clearTimeout(timer)
+  //           if (resultext === '合成成功') {
+  //             getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath)
+  //             // getCoverImg(id, name, cover, getCoverIndex)//获取封面图片
+  //             // return res.send(resultext)
+  //             // 删除文件v
+  //             for (let i = 0; i < thread; i++) {
+  //               try {
+  //                 fs.unlinkSync(downPath + `/${i}.ts`);
+  //               } catch (e) {
+  //                 // console.log();
+  //               }
+  //             }
+  //             return resolve('下载完成')
+  //           }
+  //         }
+  //       });
+  //       seprateThread.postMessage({ urlData: countArr[i], i, headers, urlPrefix, downPath, docPath });
+  //     }
+  //   })
+  // }
   //注册downloadVideoEvent事件监听
   private registerDownloadVideoEvent(): void {
     ipcMain.handle('downloadVideoEvent', this.onDownloadVideoEvent.bind(this));
   }
 
-  //处理逻辑getDownloadSpeed
+  // 处理逻辑getDownloadSpeed
+  /**
+ * 获取下载速度
+ * @param event 事件对象
+ * @param arg 参数对象
+ */
   private onGetDownloadSpeed(event: Electron.IpcMainInvokeEvent, arg: any) {
     const docPath = path.join(this.app.getPath('documents'), 'javPlayer')
     let speedValue = 0
-    //清除进度条数据
+    // 清除进度条数据
+    // 读取指定路径下的所有文件
     fs.readdirSync(docPath + '/data').forEach((file) => {
+      // 读取文件内容
       const arr = fs.readFileSync(docPath + '/data/' + file, 'utf-8')
-      //如果内容为空则return
+      // 如果内容为空则return
       if (arr === '[]') return
       try {
+        // 将文件内容解析为JSON并累加到speedValue中
         speedValue += JSON.parse(arr).length
       } catch (e) {
-        console.log('e:', e);
+        console.log('e:', e, arr);
       }
     })
+
+    // 遍历downloadPlanArr数组，将每个元素的长度累加到sums中
     let sums = 0
     this.downloadPlanArr.forEach(element => {
       sums += element.length
     });
+
+    // 返回speedValue和sums的值，如果sums为0则返回1000
     return [speedValue, sums || 1000]
   }
   private registerGetDownloadSpeed(): void {
@@ -433,6 +535,31 @@ export class WindowManager {
   private registerHandleDeleteFile(): void {
     ipcMain.handle('onHandleDeleteFile', this.onHandleDeleteFile.bind(this));
   }
+
+  //合并视频的逻辑
+  private async onMergeVideo(event: Electron.IpcMainInvokeEvent, arg: any) {
+    let getCoverIndex = 0 //第几次尝试下载图片的索引
+    const { previewPath, coverPath } = this.pathJson
+    let { name, downPath, videoPath, thread } = arg
+    name = name.replace('[无码破解]', '')
+    //截取番号出来
+    const designation = getIdNumber(name)
+    //替换名字非法字符 保留日语和中文字符，并删除其他非字母数字字符
+    name = name.replace(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, '')
+      .replaceAll(/[\·\・\●\/]/g, '')
+      .replaceAll(' ', '')
+    const resultext = await merge(name, downPath, videoPath, thread)
+    if (resultext === '合成成功') {
+      // res.send('合体成功，但是有部分视频没有下载完全')
+      getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath)
+      // getCoverImg(id, name, cover, getCoverIndex)//获取封面图片
+      return '合成成功'
+    }
+  }
+  private registeronMergeVideo(): void {
+    ipcMain.handle('onMergeVideo', this.onMergeVideo.bind(this));
+  }
+
 }
 
 
@@ -463,10 +590,6 @@ function getHeaders(resource) {
 }
 
 
-function getIdNumber(val: string) {
-  const index = val.indexOf(' ')
-  return val.slice(0, index)
-}
 
 //识别视频番号
 function getVideoId(val: string) {
@@ -496,44 +619,48 @@ function sleep(timer: number) {
   })
 }
 function getPreviewVideo(id: string, name: string, getCoverIndex: number, previewPath: string, coverPath: string) {
-  const host = 'https://eightcha.com/'
+  return new Promise<Boolean>((resolve, reject) => {
+    const host = 'https://eightcha.com/'
 
-  //将id转换为小写
-  id = id.toLowerCase()
-  let getHoverCoverIndex = 0 //第几次尝试下载hover图片的索引
-  if (getCoverIndex >= 5 || getHoverCoverIndex >= 5) return
-  /* 获取图片，图片来自missav.com中，因为这个网站没做拦截 */
-  const url = host + `${id}/cover.jpg?class=normal`
-  console.log(`lzy  url:`, url);
-  https.get(url, (response) => {
-    const localPath = coverPath + '/' + name + '.jpg'
-    const fileStream = fs.createWriteStream(localPath);
-    response.pipe(fileStream);
-    fileStream.on('finish', () => {
-      console.log('图片下载成功');
-      fileStream.close();
-      //下载第二张封面。hover中的封面
-      function getHoverCoverImg(index: number) {
-        const urlVideo = host + `${id}/preview.mp4`
-        https.get(urlVideo, (response) => {
-          const localPath = previewPath + '/' + name + '.mp4'
-          const fileStream = fs.createWriteStream(localPath);
-          response.pipe(fileStream);
-          fileStream.on('finish', () => {
-            console.log('预告片下载成功');
-            fileStream.close();
+    //将id转换为小写
+    id = id.toLowerCase()
+    let getHoverCoverIndex = 0 //第几次尝试下载hover图片的索引
+    if (getCoverIndex >= 5 || getHoverCoverIndex >= 5) return
+    /* 获取图片，图片来自missav.com中，因为这个网站没做拦截 */
+    const url = host + `${id}/cover.jpg?class=normal`
+    console.log(`lzy  url:`, url)
+    https.get(url, (response) => {
+      const localPath = coverPath + '/' + name + '.jpg'
+      const fileStream = fs.createWriteStream(localPath);
+      response.pipe(fileStream);
+      fileStream.on('finish', () => {
+        console.log('图片下载成功');
+        fileStream.close();
+        //下载第二张封面。hover中的封面
+        function getHoverCoverImg(index: number) {
+          const urlVideo = host + `${id}/preview.mp4`
+          https.get(urlVideo, (response) => {
+            const localPath = previewPath + '/' + name + '.mp4'
+            const fileStream = fs.createWriteStream(localPath);
+            response.pipe(fileStream);
+            fileStream.on('finish', () => {
+              console.log('预告片下载成功');
+              fileStream.close();
+              resolve(true)
+            });
+          }).on('error', (error) => {
+            getHoverCoverImg(++index)
+            console.error('(即将重试)下载出错:', error);
           });
-        }).on('error', (error) => {
-          getHoverCoverImg(++index)
-          console.error('(即将重试)下载出错:', error);
-        });
-      }
-      getHoverCoverImg(getHoverCoverIndex)
+        }
+        getHoverCoverImg(getHoverCoverIndex)
+      });
+    }).on('error', (error) => {
+      getPreviewVideo(id, name, ++getCoverIndex, previewPath, coverPath)
+      console.error('(即将重试,如果还是不行,就可能是来源有问题https://missav.com/查看图片路径)下载出错:', error);
     });
-  }).on('error', (error) => {
-    getPreviewVideo(id, name, ++getCoverIndex, previewPath, coverPath)
-    console.error('(即将重试,如果还是不行,就可能是来源有问题https://missav.com/查看图片路径)下载出错:', error);
-  });
+  })
+
 }
 
 
@@ -574,4 +701,55 @@ function getCoverImg(id: string, name: string, cover2: string, getCoverIndex: nu
     console.error('(即将重试)下载出错:', error);
   });
 
+}
+
+
+// 把清洗和处理名称的逻辑抽离为一个单独的函数。
+function sanitizeVideoName(name) {
+  // 替换掉名字中的非法字符
+  return name.replace('[无码破解]', '')
+    // 保留中文、日文字符，删除其他非字母数字字符。
+    .replaceAll(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, '')
+    .replaceAll(/[\·\・\●\/]/g, '')
+    .replaceAll(' ', '');
+}
+
+// 把处理M3U8的逻辑抽离为一个单独的函数。
+async function processM3u8(url, headers) {
+  const videoName = url.split('/')[url.split('/').length - 1].split('.')[0];
+  const urlPrefix = url.split('/').splice(0, url.split('/').length - 1).join('/') + '/';
+  try {
+    const { data: m3u8Data } = await axios(url, {
+      method: 'get', headers, httpsAgent: new https.Agent({
+        rejectUnauthorized: false  // 禁用SSL证书验证。
+      })
+    });
+    const dataArr = m3u8Data.split('\n').filter((res) => res.indexOf(videoName) === 0);
+    return { videoName, urlPrefix, dataArr };
+  } catch (e: any) {
+    console.error('处理M3U8文件出错:', e.message);
+    return { videoName, urlPrefix, dataArr: [] };
+  }
+
+}
+
+
+// 为了优化代码，我们添加了一个处理合并超时的新函数。
+async function mergeWithTimeout(...arg) {
+  const [name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation] = arg;
+  const resultText = await merge(name, downPath, videoPath, thread);
+  // 如果合成成功，获取视频预览图和封面图。
+  if (resultText === '合成成功') {
+    getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
+    return '下载完成，但是有部分视频没有下载完全'
+  }
+}
+
+//清空文件夹内容
+function deleteDirFile(path: string) {
+  if (path) {
+    fs.readdirSync(path).forEach(async (file) => {
+      await fs.unlinkSync(path + '/' + file)
+    })
+  }
 }
