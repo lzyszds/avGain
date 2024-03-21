@@ -301,14 +301,14 @@ export class WindowManager {
           console.log(`完成进度：`, downLoadPlan, thread, i);
           // 检查是否所有线程下载任务均已完成。
           if (downLoadPlan == thread) {
-            console.log(`lzy  name:`, name)
+            if (timer) clearTimeout(timer);
             // 如果所有线程完成下载，尝试合并视频片段。
             const resultText = await merge(name, downPath, videoPath, thread);
             console.log(`lzy  resultText:`, resultText)
             // 如果合成成功，获取视频预览图和封面图。
             if (resultText == '合成成功') {
-              setTimeout(() => {
-                getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
+              setTimeout(async () => {
+                await getPreviewVideo(designation!, name, getCoverIndex, previewPath, coverPath);
                 // 清理不需要的临时文件。
                 deleteDirFile(downPath)
                 // 完成下载任务，返回结果。
@@ -322,9 +322,9 @@ export class WindowManager {
           timer = setTimeout(async () => {
             // 如果大部分线程下载完成，但仍有一些未完成，尝试合并现有片段。
             if (downLoadPlan >= thread - 3) {
-              const result = await mergeWithTimeout(name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation);
+              await mergeWithTimeout(name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation);
               if (timer) clearTimeout(timer);
-              return result === '下载完成，但是有部分视频没有下载完全'
+              resolve('下载完成');
             }
           }, 5 * 60 * 1000); // 5分钟超时。
         });
@@ -543,7 +543,8 @@ export class WindowManager {
     let { name, downPath, videoPath, thread } = arg
     name = name.replace('[无码破解]', '')
     //截取番号出来
-    const designation = getIdNumber(name)
+    const designation = getVideoId(name)
+    if (!designation) return '番号不正确'
     //替换名字非法字符 保留日语和中文字符，并删除其他非字母数字字符
     name = name.replace(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, '')
       .replaceAll(/[\·\・\●\/]/g, '')
@@ -716,15 +717,19 @@ function sanitizeVideoName(name) {
 
 // 把处理M3U8的逻辑抽离为一个单独的函数。
 async function processM3u8(url, headers) {
-  const videoName = url.split('/')[url.split('/').length - 1].split('.')[0];
-  const urlPrefix = url.split('/').splice(0, url.split('/').length - 1).join('/') + '/';
+  let videoName = url.split('/')[url.split('/').length - 1].split('.')[0];
+  let urlPrefix = url.split('/').splice(0, url.split('/').length - 1).join('/') + '/';
   try {
     const { data: m3u8Data } = await axios(url, {
       method: 'get', headers, httpsAgent: new https.Agent({
         rejectUnauthorized: false  // 禁用SSL证书验证。
       })
     });
-    const dataArr = m3u8Data.split('\n').filter((res) => res.indexOf(videoName) === 0);
+    let dataArr = m3u8Data.split('\n').filter((res) => res.indexOf(videoName) === 0);
+    if (dataArr.length === 0) {
+      dataArr = m3u8Data.split('\n').filter((res) => res.indexOf('https') === 0);
+      urlPrefix = '';
+    }
     return { videoName, urlPrefix, dataArr };
   } catch (e: any) {
     console.error('处理M3U8文件出错:', e.message);
@@ -738,18 +743,34 @@ async function processM3u8(url, headers) {
 async function mergeWithTimeout(...arg) {
   const [name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation] = arg;
   const resultText = await merge(name, downPath, videoPath, thread);
+  console.log("有部分视频没有下载完全");
   // 如果合成成功，获取视频预览图和封面图。
-  if (resultText === '合成成功') {
-    getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
+  if (resultText == '合成成功') {
+    await getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
     return '下载完成，但是有部分视频没有下载完全'
   }
 }
 
 //清空文件夹内容
-function deleteDirFile(path: string) {
+function deleteDirFile(path: string, retries = 3, delay = 3000) {
   if (path) {
-    fs.readdirSync(path).forEach(async (file) => {
-      await fs.unlinkSync(path + '/' + file)
+    fs.readdirSync(path).forEach((file) => {
+      try {
+        //如果文件不存在
+        if (!fs.existsSync(path + '/' + file)) return
+
+        fs.unlink(path + '/' + file, (err) => {
+          if (!err) return
+          if (err.code === 'EBUSY' && retries > 0) {
+            if (file.indexOf('.ts') == -1) {
+              console.log(`文件正被占用，${4 - retries}次重试`)
+            }
+            setTimeout(() => {
+              deleteDirFile(path, retries - 1, delay);
+            }, delay);
+          }
+        })
+      } catch (e) { }
     })
   }
 }

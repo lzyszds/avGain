@@ -3,7 +3,7 @@ const { parentPort } = require("worker_threads");
 const getVideo = require("./getVideo.js");
 parentPort.on("message", (limit) => {
   const { urlData, index, urlPrefix, headers, downPath, docPath } = limit;
-  if (!urlPrefix || !urlData) {
+  if (!urlData) {
     return parentPort.postMessage({ msg: '1', result: '下载完成' })
   }
   try {

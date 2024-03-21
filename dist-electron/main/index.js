@@ -1034,7 +1034,8 @@ class WindowManager {
           ++downLoadPlan;
           console.log(`完成进度：`, downLoadPlan, thread, i);
           if (downLoadPlan == thread) {
-            console.log(`lzy  name:`, name);
+            if (timer)
+              clearTimeout(timer);
             const resultText = await merge(name, downPath, videoPath, thread);
             console.log(`lzy  resultText:`, resultText);
             if (resultText == "合成成功") {
@@ -1049,10 +1050,10 @@ class WindowManager {
             clearTimeout(timer);
           timer = setTimeout(async () => {
             if (downLoadPlan >= thread - 3) {
-              const result = await mergeWithTimeout(name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation);
+              await mergeWithTimeout(name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation);
               if (timer)
                 clearTimeout(timer);
-              return result === "下载完成，但是有部分视频没有下载完全";
+              resolve("下载完成");
             }
           }, 5 * 60 * 1e3);
         });
@@ -1241,7 +1242,9 @@ class WindowManager {
     const { previewPath, coverPath } = this.pathJson;
     let { name, downPath, videoPath, thread } = arg;
     name = name.replace("[无码破解]", "");
-    const designation = getIdNumber(name);
+    const designation = getVideoId(name);
+    if (!designation)
+      return "番号不正确";
     name = name.replace(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, "").replaceAll(/[\·\・\●\/]/g, "").replaceAll(" ", "");
     const resultext = await merge(name, downPath, videoPath, thread);
     if (resultext === "合成成功") {
@@ -1334,8 +1337,8 @@ function sanitizeVideoName(name) {
   return name.replace("[无码破解]", "").replaceAll(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, "").replaceAll(/[\·\・\●\/]/g, "").replaceAll(" ", "");
 }
 async function processM3u8(url2, headers) {
-  const videoName = url2.split("/")[url2.split("/").length - 1].split(".")[0];
-  const urlPrefix = url2.split("/").splice(0, url2.split("/").length - 1).join("/") + "/";
+  let videoName = url2.split("/")[url2.split("/").length - 1].split(".")[0];
+  let urlPrefix = url2.split("/").splice(0, url2.split("/").length - 1).join("/") + "/";
   try {
     const { data: m3u8Data } = await axios(url2, {
       method: "get",
@@ -1345,7 +1348,11 @@ async function processM3u8(url2, headers) {
         // 禁用SSL证书验证。
       })
     });
-    const dataArr = m3u8Data.split("\n").filter((res) => res.indexOf(videoName) === 0);
+    let dataArr = m3u8Data.split("\n").filter((res) => res.indexOf(videoName) === 0);
+    if (dataArr.length === 0) {
+      dataArr = m3u8Data.split("\n").filter((res) => res.indexOf("https") === 0);
+      urlPrefix = "";
+    }
     return { videoName, urlPrefix, dataArr };
   } catch (e) {
     console.error("处理M3U8文件出错:", e.message);
@@ -1355,15 +1362,32 @@ async function processM3u8(url2, headers) {
 async function mergeWithTimeout(...arg) {
   const [name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation] = arg;
   const resultText = await merge(name, downPath, videoPath, thread);
-  if (resultText === "合成成功") {
-    getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
+  console.log("有部分视频没有下载完全");
+  if (resultText == "合成成功") {
+    await getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
     return "下载完成，但是有部分视频没有下载完全";
   }
 }
-function deleteDirFile(path2) {
+function deleteDirFile(path2, retries = 3, delay = 3e3) {
   if (path2) {
-    fs.readdirSync(path2).forEach(async (file) => {
-      await fs.unlinkSync(path2 + "/" + file);
+    fs.readdirSync(path2).forEach((file) => {
+      try {
+        if (!fs.existsSync(path2 + "/" + file))
+          return;
+        fs.unlink(path2 + "/" + file, (err) => {
+          if (!err)
+            return;
+          if (err.code === "EBUSY" && retries > 0) {
+            if (file.indexOf(".ts") == -1) {
+              console.log(`文件正被占用，${4 - retries}次重试`);
+            }
+            setTimeout(() => {
+              deleteDirFile(path2, retries - 1, delay);
+            }, delay);
+          }
+        });
+      } catch (e) {
+      }
     });
   }
 }

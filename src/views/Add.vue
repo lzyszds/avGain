@@ -209,25 +209,27 @@ async function onSubmit() {
 
     ElNotification({
       title: "下载提示：",
-      message: res + ":" + name,
+      message: res + ":" + name + "等待10秒后开始下载下一个任务",
       position: "bottom-left",
       duration: 10000,
     });
 
-    // 将备选内容第一个赋值给sizeForm 并删除备选内容 然后开始下载下一个
-    if (alternateArr.value.length > 0) {
-      sizeForm.value.name = alternateArr.value[0].name;
-      sizeForm.value.url = alternateArr.value[0].url;
-      alternateArr.value.splice(0, 1);
+    setTimeout(() => {
+      // 将备选内容第一个赋值给sizeForm 并删除备选内容 然后开始下载下一个
+      if (alternateArr.value.length > 0) {
+        sizeForm.value.name = alternateArr.value[0].name;
+        sizeForm.value.url = alternateArr.value[0].url;
+        alternateArr.value.splice(0, 1);
 
-      const timerItem = setInterval(() => {
-        if (getDownloadSize() == "0.00B") {
-          clearInterval(timer);
-          onSubmit();
-          clearInterval(timerItem);
-        }
-      }, 1000);
-    }
+        const timerItem = setInterval(() => {
+          if (getDownloadSize() == "0.00B") {
+            clearInterval(timer);
+            onSubmit();
+            clearInterval(timerItem);
+          }
+        }, 1000);
+      }
+    }, 1000 * 10);
   } catch (err) {
     console.error(err);
   }
@@ -267,7 +269,7 @@ async function onMergeVideo() {
   });
   ElNotification({
     title: "下载提示：",
-    message: msg,
+    message: msg + "合并完成，请等待下一个任务",
     position: "bottom-left",
     duration: 0,
   });
@@ -297,7 +299,7 @@ const updateSpeedDownload = () => {
     return;
   }
   // 格式化文件大小并更新速度下载值
-  speedDownload.value = formatFileSize((totalSize - oldSize) * 2);
+  speedDownload.value = formatFileSize(totalSize - oldSize);
   oldSize = totalSize;
 };
 
