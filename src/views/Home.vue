@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { onMounted, ref, reactive } from "vue";
+import { onMounted, ref, reactive, watch } from "vue";
 import Plyr from "plyr";
 import { useRouter } from "vue-router";
 import LzyIcon from "@/components/LzyIcon.vue";
 import { ElMessageBox, ElMessage } from "element-plus";
 import { Videodatalist, listVideoHasObj } from "./Home";
+
+// 获取本地存储的数据
+
 const {
   onHandleStoreData,
   onHandleOpenDir,
@@ -21,13 +24,28 @@ onMounted(() => {
     // options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 4],
     /* enabled：允许使用本地存储来存储用户设置。key：要使用的键名称。 */
     enabled: true,
+    displayDuration: false,
     // key: "plyr",
     /* 将当前时间显示为倒计时而不是增量计数器。 */
     invertTime: true,
+    //快捷键 启用
+    keyboard: {
+      focused: true,
+      global: true,
+    },
+    storage: {
+      enabled: true,
+      key: "plyr",
+    },
     /* 默认音量 */
-    volume: 1,
+    volume: Number(JSON.parse(localStorage.getItem("plyr")!).volume) || 0.5,
     /* 快进时间 */
     seekTime: 10,
+    /* 播放速度 */
+    speed: {
+      selected: 1,
+      options: [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5],
+    },
   });
   window!.player = player;
   setTimeout(async () => {
@@ -51,6 +69,7 @@ onMounted(() => {
       dirPath.video.path = "L:/av/public/video";
       dirPath.videoDownload.path = "L:/av/public/videoDownload";
     }
+    player.speed = Number(JSON.parse(localStorage.getItem("plyr")!).speed) || 1;
   }, 500);
 });
 const router = useRouter(); //路由

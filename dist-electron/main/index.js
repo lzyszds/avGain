@@ -1039,8 +1039,8 @@ class WindowManager {
             const resultText = await merge(name, downPath, videoPath, thread);
             console.log(`lzy  resultText:`, resultText);
             if (resultText == "合成成功") {
-              setTimeout(() => {
-                getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
+              setTimeout(async () => {
+                await getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
                 deleteDirFile(downPath);
                 resolve("下载完成");
               }, 1e3 * 5);
