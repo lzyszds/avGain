@@ -847,6 +847,7 @@ class WindowManager {
     this.registerCreateDir();
     this.registerHandleDeleteFile();
     this.registeronMergeVideo();
+    this.registerOpenDir();
   }
   // 处理窗口操作请求
   handleWinAction(arg) {
@@ -1254,6 +1255,14 @@ class WindowManager {
   }
   registeronMergeVideo() {
     require$$3.ipcMain.handle("onMergeVideo", this.onMergeVideo.bind(this));
+  }
+  //打开文件夹
+  onOpenDir(event, arg) {
+    const { shell } = require("electron");
+    shell.showItemInFolder(arg);
+  }
+  registerOpenDir() {
+    require$$3.ipcMain.handle("onOpenDir", this.onOpenDir.bind(this));
   }
 }
 function getHeaders(resource) {

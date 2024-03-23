@@ -25,6 +25,8 @@ const validChannels = [
   'onHandleDeleteFile',
   //合并视频
   'onMergeVideo',
+  //打开文件夹
+  'onOpenDir',
 ]
 
 const myElectron = {}

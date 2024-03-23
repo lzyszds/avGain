@@ -55,6 +55,7 @@ export class WindowManager {
     this.registerCreateDir()
     this.registerHandleDeleteFile()
     this.registeronMergeVideo()
+    this.registerOpenDir()
   }
 
   // 处理窗口操作请求
@@ -561,6 +562,14 @@ export class WindowManager {
     ipcMain.handle('onMergeVideo', this.onMergeVideo.bind(this));
   }
 
+  //打开文件夹
+  private onOpenDir(event: Electron.IpcMainInvokeEvent, arg: any) {
+    const { shell } = require('electron')
+    shell.showItemInFolder(arg)
+  }
+  private registerOpenDir(): void {
+    ipcMain.handle('onOpenDir', this.onOpenDir.bind(this));
+  }
 }
 
 

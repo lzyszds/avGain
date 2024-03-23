@@ -226,7 +226,11 @@ const deleteFile = (item) => {
           <div class="search">
             <ElInput v-model="search" @keydown.enter="searchHandle" size="small">
             </ElInput>
-            <LzyIcon name="basil:search-outline"></LzyIcon>
+            <LzyBtn
+              class="lzyIcon"
+              icon="basil:search-outline"
+              :handle="searchHandle"
+            ></LzyBtn>
           </div>
         </div>
         <div class="videoContent">
@@ -332,7 +336,8 @@ const deleteFile = (item) => {
 <style lang="scss" scoped>
 .el-main {
   padding: 10px;
-  background-color: #f5f5f5;
+  background-color: #000;
+  border-radius: 10px;
 }
 
 .videoContent {
@@ -387,7 +392,7 @@ const deleteFile = (item) => {
 
 .search {
   position: relative;
-
+  display: flex;
   .el-input {
     width: 400px;
   }
@@ -395,11 +400,12 @@ const deleteFile = (item) => {
   .lzyIcon {
     position: absolute;
     right: 0;
-    top: 15%;
+    top: 10%;
     transform: translateY(-15%);
     margin: auto;
     padding: 0 5px;
     color: #000;
+    background-color: transparent;
   }
 }
 
