@@ -13,6 +13,7 @@ import path from 'path'
 declare global {
   interface Window {
     myElectron: any;
+    ipcRenderer: any;
     player: any
   }
 }

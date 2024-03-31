@@ -786,7 +786,7 @@ function quickSortByTimestamp(arr, key, isIncremental = true) {
     return [...quickSortByTimestamp(greater, key, isIncremental), ...equal, ...quickSortByTimestamp(less, key, isIncremental)];
   }
 }
-async function merge(name, downPath, videoPath, thread) {
+async function merge(name, downPath, videoPath, thread, event) {
   let filenames;
   for (let i = 1; i <= thread; i++) {
     const has = fs.existsSync(path$1.join(downPath, `/${i}.ts`));
@@ -1038,13 +1038,12 @@ class WindowManager {
             if (timer)
               clearTimeout(timer);
             const resultText = await merge(name, downPath, videoPath, thread);
-            console.log(`lzy  resultText:`, resultText);
             if (resultText == "合成成功") {
               setTimeout(async () => {
                 await getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
                 deleteDirFile(downPath);
                 resolve("下载完成");
-              }, 1e3 * 5);
+              }, 1e3 * 3);
             }
           }
           if (timer)
@@ -1056,7 +1055,7 @@ class WindowManager {
                 clearTimeout(timer);
               resolve("下载完成");
             }
-          }, 5 * 60 * 1e3);
+          }, 3 * 60 * 1e3);
         });
         separateThread.postMessage({
           urlData: countArr[i],

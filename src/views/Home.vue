@@ -43,8 +43,8 @@ onMounted(() => {
     seekTime: 10,
     /* 播放速度 */
     speed: {
-      selected: 1,
-      options: [0.75, 1, 1.25, 1.5, 1.75, 2, 2.5],
+      selected: 1.5,
+      options: [0.75, 1.5, 2, 2.5],
     },
   });
   window!.player = player;
@@ -95,7 +95,7 @@ const toolHandle = [
   {
     tipsContent: "切换模式",
     icon: "basil:exchange-solid",
-    handle: () => {},
+    handle: () => { },
   },
   {
     tipsContent: "目录列表",
@@ -216,53 +216,26 @@ const deleteFile = (item) => {
     <el-container>
       <el-main>
         <div class="toHref">
-          <LzyBtn
-            v-for="(item, index) in toolHandle"
-            :key="index"
-            :icon="item.icon"
-            :tipsContent="item.tipsContent"
-            :handle="item.handle"
-          ></LzyBtn>
+          <LzyBtn v-for="(item, index) in toolHandle" :key="index" :icon="item.icon" :tipsContent="item.tipsContent"
+            :handle="item.handle"></LzyBtn>
           <div class="search">
             <ElInput v-model="search" @keydown.enter="searchHandle" size="small">
             </ElInput>
-            <LzyBtn
-              class="lzyIcon"
-              icon="basil:search-outline"
-              :handle="searchHandle"
-            ></LzyBtn>
+            <LzyBtn class="lzyIcon" icon="basil:search-outline" :handle="searchHandle"></LzyBtn>
           </div>
         </div>
         <div class="videoContent">
-          <video
-            id="video"
-            :src="video"
-            style="display: none"
-            controls
-            crossorigin=""
-            playsinline
-            poster=""
-          >
+          <video id="video" :src="video" style="display: none" controls crossorigin="" playsinline poster="">
             <source type="video/mp4" />
           </video>
         </div>
       </el-main>
       <el-aside class="coverList" width="380px">
         <ul>
-          <li
-            v-for="(item, index) in videoDataList"
-            :key="index"
-            @mouseenter="handleMouse('enter', index)"
-            @mouseleave="handleMouse('leave', index)"
-            @click="handleMouse('click', index)"
-            v-show="listVideoHasObj.filters[index]"
-          >
-            <video
-              v-if="listVideoHasObj.showPreview[index]"
-              autoplay
-              muted
-              :src="item.preview"
-            ></video>
+          <li v-for="(item, index) in videoDataList" :key="index" @mouseenter="handleMouse('enter', index)"
+            @mouseleave="handleMouse('leave', index)" @click="handleMouse('click', index)"
+            v-show="listVideoHasObj.filters[index]">
+            <video v-if="listVideoHasObj.showPreview[index]" autoplay muted :src="item.preview"></video>
             <img v-else :src="item.cover" alt="" />
             <h4>
               {{ item.name }}
@@ -286,37 +259,16 @@ const deleteFile = (item) => {
         </p>
       </div>
       <template #footer>
-        <LzyBtn
-          @click="createDirFn"
-          title="一键生成文件夹"
-          icon="system-uicons:episodes"
-        ></LzyBtn>
+        <LzyBtn @click="createDirFn" title="一键生成文件夹" icon="system-uicons:episodes"></LzyBtn>
         <LzyBtn @click="saveDirPath" title="保存" icon="basil:save-outline"></LzyBtn>
       </template>
     </el-dialog>
-    <el-dialog
-      class="listContent"
-      v-model="listDialog"
-      :fullscreen="true"
-      title="Warning"
-      width="100%"
-      align-center
-    >
+    <el-dialog class="listContent" v-model="listDialog" :fullscreen="true" title="Warning" width="100%" align-center>
       <ul>
-        <li
-          v-for="(item, index) in videoDataList"
-          :key="index"
-          @mouseenter="handleMouse('enter', index)"
-          @mouseleave="handleMouse('leave', index)"
-          @click="handleMouse('click', index)"
-          v-show="listVideoHasObj.filters[index]"
-        >
-          <video
-            v-if="listVideoHasObj.showPreview[index]"
-            autoplay
-            muted
-            :src="item.preview"
-          ></video>
+        <li v-for="(item, index) in videoDataList" :key="index" @mouseenter="handleMouse('enter', index)"
+          @mouseleave="handleMouse('leave', index)" @click="handleMouse('click', index)"
+          v-show="listVideoHasObj.filters[index]">
+          <video v-if="listVideoHasObj.showPreview[index]" autoplay muted :src="item.preview"></video>
           <img v-else :src="item.cover" alt="" />
 
           <h4>
@@ -393,6 +345,7 @@ const deleteFile = (item) => {
 .search {
   position: relative;
   display: flex;
+
   .el-input {
     width: 400px;
   }
@@ -479,7 +432,7 @@ const deleteFile = (item) => {
     }
   }
 
-  & > div.el-dialog__body {
+  &>div.el-dialog__body {
     height: 93vh;
     padding: 5px;
   }
@@ -510,6 +463,7 @@ ul {
     display: grid;
     grid-template-rows: 210px 1fr 20px 30px;
     gap: 10px;
+
     &.acitve::after {
       content: "";
       width: 50px;
@@ -521,17 +475,20 @@ ul {
       background: url(./play.png) no-repeat;
       background-size: 100%;
     }
+
     video,
     img {
       height: 210px;
       width: 328px;
     }
+
     .deleteFile {
       width: 100%;
       border-radius: 0.5rem;
       background-color: rgb(255, 74, 74);
       color: #fff;
     }
+
     h4 {
       /* height: 135px; */
       font-size: 14px;

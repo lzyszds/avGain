@@ -1,9 +1,15 @@
 <script lang="ts" setup>
-import { reactive, ref, computed } from "vue";
+import { reactive, ref, watch } from "vue";
 import { ElNotification } from "element-plus";
 import LzyIcon from "@/components/LzyIcon.vue";
 import { useStorage } from "@vueuse/core";
+
 const el = window.myElectron;
+const ipcRenderer = window.ipcRenderer;
+
+// setInterval(() => {
+//   console.log(ipcRenderer);
+// }, 1000);
 
 const downPath = await el.onHandleStoreData("downloadPath");
 const previewPath = await el.onHandleStoreData("previewPath");
@@ -56,7 +62,6 @@ async function onSubmit() {
   let timer;
   timer = setInterval(async () => {
     const [a, b] = await el.getDownloadSpeed();
-    console.log(`lzy  a, b:`, a, b);
     percentage.value = Number(((a / b) * 100).toFixed(2));
     progress.value = [a, b];
 
@@ -166,7 +171,7 @@ const updateSpeedDownload = () => {
     return;
   }
   // 格式化文件大小并更新速度下载值
-  speedDownload.value = formatFileSize(totalSize - oldSize);
+  speedDownload.value = Number(formatFileSize(totalSize - oldSize)) > 0 ? formatFileSize(totalSize - oldSize) : "0.00B";
   oldSize = totalSize;
 };
 
@@ -218,10 +223,7 @@ function handleHistory(currentPage: number = 1): any {
   <div class="addWhole">
     <ul class="dirState">
       <li>
-        <lzy-icon
-          name="solar:folder-with-files-broken"
-          style="width: 12px; vertical-align: -6px"
-        />
+        <lzy-icon name="solar:folder-with-files-broken" style="width: 12px; vertical-align: -6px" />
         {{ downPath }}
       </li>
       <li class="dirContent" v-for="(item, index) in fileDirlist" :key="index">
@@ -232,21 +234,9 @@ function handleHistory(currentPage: number = 1): any {
         <span>{{ formatFileSize(item.state.size) }}</span>
       </li>
       <li class="tools">
-        <LzyBtn
-          :handle="getDownloadListContent"
-          title="刷新"
-          icon="ant-design:reload-outlined"
-        ></LzyBtn>
-        <LzyBtn
-          :handle="deleteDirFile"
-          title="清空"
-          icon="ant-design:delete-twotone"
-        ></LzyBtn>
-        <LzyBtn
-          :title="getDownloadSize()"
-          :handle="onOpenDir"
-          icon="ic:baseline-insert-chart-outlined"
-        ></LzyBtn>
+        <LzyBtn :handle="getDownloadListContent" title="刷新" icon="ant-design:reload-outlined"></LzyBtn>
+        <LzyBtn :handle="deleteDirFile" title="清空" icon="ant-design:delete-twotone"></LzyBtn>
+        <LzyBtn :title="getDownloadSize()" :handle="onOpenDir" icon="ic:baseline-insert-chart-outlined"></LzyBtn>
         <LzyBtn :handle="onMergeVideo" title="合成" icon="gg:merge-horizontal"></LzyBtn>
       </li>
     </ul>
@@ -256,13 +246,7 @@ function handleHistory(currentPage: number = 1): any {
         <img src="../../public/logo.png" width="40" height="40" />
         <span class="av">AudioVideo_Gain</span>
       </h1>
-      <el-form
-        ref="form"
-        :model="sizeForm"
-        label-width="auto"
-        label-position="left"
-        size="large"
-      >
+      <el-form ref="form" :model="sizeForm" label-width="auto" label-position="left" size="large">
         <el-form-item label="资源来路">
           <el-radio-group v-model="sizeForm.resource">
             <el-radio border label="SuperJav" />
@@ -273,12 +257,7 @@ function handleHistory(currentPage: number = 1): any {
           <el-input v-model="sizeForm.name" />
         </el-form-item>
         <el-form-item label="下载地址">
-          <el-input
-            v-model="sizeForm.url"
-            :autosize="{ minRows: 3, maxRows: 5 }"
-            type="textarea"
-            spellcheck="false"
-          />
+          <el-input v-model="sizeForm.url" :autosize="{ minRows: 3, maxRows: 5 }" type="textarea" spellcheck="false" />
         </el-form-item>
         <el-form-item label="下载线程">
           <el-input v-model="sizeForm.thread" type="number" max="20" min="1" />
@@ -291,18 +270,9 @@ function handleHistory(currentPage: number = 1): any {
           <button class="button download" @click="onSubmit" type="button">
             <span class="button__text">开始下载</span>
             <span class="button__icon">
-              <svg
-                class="svg"
-                fill="none"
-                height="24"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
+              <svg class="svg" fill="none" height="24" stroke="currentColor" stroke-linecap="round"
+                stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24"
+                xmlns="http://www.w3.org/2000/svg">
                 <line x1="12" x2="12" y1="5" y2="19"></line>
                 <line x1="5" x2="19" y1="12" y2="12"></line>
               </svg>
@@ -335,12 +305,7 @@ function handleHistory(currentPage: number = 1): any {
     </div>
     <div class="footer">
       <el-collapse class="collapse" v-model="activeNames" :accordion="true">
-        <el-collapse-item
-          v-for="(item, index) in handleHistory(newPage)"
-          :key="index"
-          :title="item.name"
-          :name="index"
-        >
+        <el-collapse-item v-for="(item, index) in handleHistory(newPage)" :key="index" :title="item.name" :name="index">
           <div>
             {{ item.url }}
           </div>
@@ -348,12 +313,8 @@ function handleHistory(currentPage: number = 1): any {
       </el-collapse>
       <!-- 分页按钮 -->
       <div style="text-align: center; margin-top: 10px">
-        <el-pagination
-          layout="prev, pager, next"
-          :total="downloadHistory.length"
-          :page-size="15"
-          @current-change="newPage = $event"
-        />
+        <el-pagination layout="prev, pager, next" :total="downloadHistory.length" :page-size="15"
+          @current-change="newPage = $event" />
       </div>
     </div>
   </div>
@@ -442,9 +403,11 @@ ul {
   :deep(.el-collapse-item__content) {
     user-select: auto !important;
   }
+
   .el-form {
     padding-top: 20px;
   }
+
   .sumbit :deep(.el-form-item__content) {
     justify-content: end;
     gap: 20px;
@@ -493,7 +456,9 @@ ul {
       }
     }
   }
+
   :deep(.el-form-item--large) {
+
     .el-form-item__label,
     span {
       font-family: "almama";
@@ -510,10 +475,13 @@ ul {
   height: calc(100vh - 60px);
   display: grid;
   grid-template-rows: 1fr 40px;
+
   :deep(.el-collapse) {
     height: 720px;
+
     .el-collapse-item {
       width: 380px;
+
       button {
         font-size: 11px;
         line-height: 15px;
@@ -534,6 +502,7 @@ ul {
       }
     }
   }
+
   :deep(.el-pagination) {
     justify-content: center;
   }
@@ -543,13 +512,16 @@ ul {
   :deep(.el-progress-bar__outer) {
     height: 20px !important;
     background-color: #000;
+
     .el-progress-bar__inner {
       background-image: linear-gradient(to top, #a18cd1 0%, #fbc2eb 100%);
       margin: 3px;
       max-width: 99%;
       height: 70%;
     }
+
     .el-progress-bar__innerText {
+
       // color: var(--hoverColor);
       &::before {
         content: "下载进度：";
@@ -577,6 +549,7 @@ ul {
   border-radius: 10px;
   overflow: hidden;
   transform: scale(0.7);
+
   &,
   .button__icon,
   .button__text {
@@ -624,7 +597,9 @@ ul {
     box-shadow: 0px 0px var(--main-color);
   }
 }
-.el-button,.button {
+
+.el-button,
+.button {
   width: 100%;
   font-family: "dindin";
 }

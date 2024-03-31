@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { exec } from "child_process";
 // merge('IPX-005リピーター続出！噂の本番できちゃうおっパブ店 Fカップ巨乳嬢を味わい尽くせ桃乃木かな')
-export async function merge(name: any, downPath: string, videoPath: string, thread: number) {
+export async function merge(name: any, downPath: string, videoPath: string, thread: number, event: any) {
   let filenames
   for (let i = 1; i <= thread; i++) {
     const has = fs.existsSync(path.join(downPath, `/${i}.ts`));

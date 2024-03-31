@@ -293,6 +293,7 @@ export class WindowManager {
 
       // 为不同的下载线程初始化Worker线程。
       for (let i = 0; i < thread; i++) {
+
         // 创建一个新的Worker线程实例，用于处理下载任务。
         const separateThread = new Worker(appPath + `\\seprate\\seprateThread${i + 1}.js`);
         // 注册消息处理事件，以监听Worker线程的消息。
@@ -304,8 +305,7 @@ export class WindowManager {
           if (downLoadPlan == thread) {
             if (timer) clearTimeout(timer);
             // 如果所有线程完成下载，尝试合并视频片段。
-            const resultText = await merge(name, downPath, videoPath, thread);
-            console.log(`lzy  resultText:`, resultText)
+            const resultText = await merge(name, downPath, videoPath, thread, event);
             // 如果合成成功，获取视频预览图和封面图。
             if (resultText == '合成成功') {
               setTimeout(async () => {
@@ -314,7 +314,7 @@ export class WindowManager {
                 deleteDirFile(downPath)
                 // 完成下载任务，返回结果。
                 resolve('下载完成');
-              }, 1000 * 5)
+              }, 1000 * 3)
             }
           }
 
@@ -327,7 +327,7 @@ export class WindowManager {
               if (timer) clearTimeout(timer);
               resolve('下载完成');
             }
-          }, 5 * 60 * 1000); // 5分钟超时。
+          }, 3 * 60 * 1000); // 5分钟超时。
         });
 
         // 向Worker线程发送任务信息，启动下载。
