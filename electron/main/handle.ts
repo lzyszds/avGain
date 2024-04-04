@@ -56,6 +56,7 @@ export class WindowManager {
     this.registerHandleDeleteFile()
     this.registeronMergeVideo()
     this.registerOpenDir()
+    this.registerHandleStarVideo()
   }
 
   // 处理窗口操作请求
@@ -195,15 +196,15 @@ export class WindowManager {
     const { coverPath, previewPath, videoPath } = json
     this.pathJson = json
     //获取视频列表 解决有些视频没有封面的问题
-    // const existArr = fs.readdirSync(videoPath)
+    const existArr = fs.readdirSync(videoPath)
     const coverList = fs.readdirSync(coverPath).map((file: any) => {
       if (!file.startsWith('.') && file.indexOf('Thumbs') == 0) return null
       if (file.indexOf('.png') == -1) {
         const name = file.split('.jpg')[0]
         //如果视频存在封面，将封面从数组中删除 以备后续下载
-        // if (existArr.indexOf(`${name}.mp4`) != -1) {
-        //   existArr.splice(existArr.indexOf(`${name}.mp4`), 1)
-        // }
+        if (existArr.indexOf(`${name}.mp4`) != -1) {
+          existArr.splice(existArr.indexOf(`${name}.mp4`), 1)
+        }
 
         let stat: any = null, datails: any = null
         try {
@@ -226,22 +227,25 @@ export class WindowManager {
           cover: `${coverPath}/${name}.jpg`,
           preview: `${previewPath}/${name}.mp4`,
           url: `${videoPath}/${name}.mp4`,
-          datails
+          datails,
+          isStar: json.starArr.indexOf(name) != -1
         }
       } else {
         return null
       }
     }).filter((item) => item !== null);
     //将没有封面的视频封面进行下载
-    // console.log(existArr);
-    // existArr.forEach((item: any) => {
-    //   const videoId = getVideoId(item)
-    //   if (videoId) {
-    //     const name = item.split('.mp4')[0]
-    //     getPreviewVideo(videoId, name, 0, previewPath, coverPath)
-    //   }
-    // })
-    return quickSortByTimestamp(coverList.filter((res) => res), 'stampTime', false)
+    console.log(existArr);
+    existArr.forEach((item: any) => {
+      const videoId = getVideoId(item)
+      if (videoId) {
+        const name = item.split('.mp4')[0]
+        getPreviewVideo(videoId, name, 0, previewPath, coverPath)
+      }
+    })
+    const videoListData = quickSortByTimestamp(coverList.filter((res) => res), 'stampTime', false)
+    //如果是收藏视频，将收藏视频放在最后面
+    return videoListData.filter((res) => !res.isStar).concat(videoListData.filter((res) => res.isStar))
   }
   //注册onGetListData事件监听
   private registerGetListData(): void {
@@ -323,7 +327,7 @@ export class WindowManager {
           timer = setTimeout(async () => {
             // 如果大部分线程下载完成，但仍有一些未完成，尝试合并现有片段。
             if (downLoadPlan >= thread - 3) {
-              await mergeWithTimeout(name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation);
+              await mergeWithTimeout(name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation, event);
               if (timer) clearTimeout(timer);
               resolve('下载完成');
             }
@@ -519,8 +523,17 @@ export class WindowManager {
     const { videoPath, previewPath, coverPath } = this.pathJson
     fs.access(`${videoPath}/${name}.mp4`, (err) => {
       if (err) return console.log('文件不存在')
-      fs.unlinkSync(`${videoPath}/${name}.mp4`)
+      try {
+        fs.unlinkSync(`${videoPath}/${name}.mp4`)
+      } catch (e: any) {
+        //如果删除文件失败(文件占用)，就等待2分钟后再次删除
+        if (e) console.log('删除文件失败', e.message)
+        setTimeout(() => {
+          fs.unlinkSync(`${videoPath}/${name}.mp4`)
+        }, 500)
+      }
     })
+
     fs.access(`${previewPath}/${name}.mp4`, (err) => {
       if (err) return console.log('文件不存在')
       fs.unlinkSync(`${previewPath}/${name}.mp4`)
@@ -550,7 +563,7 @@ export class WindowManager {
     name = name.replace(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, '')
       .replaceAll(/[\·\・\●\/]/g, '')
       .replaceAll(' ', '')
-    const resultext = await merge(name, downPath, videoPath, thread)
+    const resultext = await merge(name, downPath, videoPath, thread, event)
     if (resultext === '合成成功') {
       // res.send('合体成功，但是有部分视频没有下载完全')
       getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath)
@@ -569,6 +582,38 @@ export class WindowManager {
   }
   private registerOpenDir(): void {
     ipcMain.handle('onOpenDir', this.onOpenDir.bind(this));
+  }
+
+  //收藏视频
+  private onHandleStarVideo(event: Electron.IpcMainInvokeEvent, arg: any) {
+    const storePath = path.join(this.app.getPath('documents'), 'javPlayer')
+    const storeFilePath = path.join(storePath, 'storeLog.json')
+    const storeFile = fs.readFileSync(storeFilePath, 'utf-8')
+    const storeData = JSON.parse(storeFile)
+    let starArr = storeData.starArr
+
+    //如果还未收藏过任何视频
+    if (!starArr) {
+      starArr = [arg]
+    } else {
+      //如果已经收藏过了 就将其取消收藏
+      if (starArr.indexOf(arg) != -1) {
+        starArr.splice(starArr.indexOf(arg), 1)
+        return fs.writeFileSync(storeFilePath, JSON.stringify(Object.assign(storeData, {
+          starArr: starArr
+        })), 'utf-8')
+      }
+      //进行收藏
+      starArr.push(arg)
+    }
+
+    console.log(`lzy  starArr:`, starArr)
+    fs.writeFileSync(storeFilePath, JSON.stringify(Object.assign(storeData, {
+      starArr: starArr
+    })), 'utf-8')
+  }
+  private registerHandleStarVideo(): void {
+    ipcMain.handle('onHandleStarVideo', this.onHandleStarVideo.bind(this));
   }
 }
 
@@ -750,8 +795,8 @@ async function processM3u8(url, headers) {
 
 // 为了优化代码，我们添加了一个处理合并超时的新函数。
 async function mergeWithTimeout(...arg) {
-  const [name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation] = arg;
-  const resultText = await merge(name, downPath, videoPath, thread);
+  const [name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation, event] = arg;
+  const resultText = await merge(name, downPath, videoPath, thread, event);
   console.log("有部分视频没有下载完全");
   // 如果合成成功，获取视频预览图和封面图。
   if (resultText == '合成成功') {

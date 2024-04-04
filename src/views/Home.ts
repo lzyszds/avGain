@@ -7,10 +7,11 @@ export interface Videodatalist {
   datails: {
     time: string,
     size: string
-  }
+  },
+  isStar: boolean,
 }
 
-export interface listVideoHasObj{
+export interface listVideoHasObj {
   showPreview: boolean[],
   filters: boolean[],
 }

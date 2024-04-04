@@ -165,13 +165,15 @@ const updateSpeedDownload = () => {
   fileDirlist.value.forEach((res) => {
     totalSize += res.state.size;
   });
-
   // 如果新的总大小与旧的总大小相同，则不更新速度下载值
   if (totalSize === oldSize) {
     return;
   }
+  const size = formatFileSize(totalSize - oldSize)
+  const sizeName = size
   // 格式化文件大小并更新速度下载值
-  speedDownload.value = Number(formatFileSize(totalSize - oldSize)) > 0 ? formatFileSize(totalSize - oldSize) : "0.00B";
+  speedDownload.value = Number(size.replace(/[KMGT]B/, "")) > 0 ? sizeName : "0.00B";
+
   oldSize = totalSize;
 };
 
@@ -416,6 +418,7 @@ ul {
 
     span {
       text-align: center;
+      color: #fff;
     }
   }
 

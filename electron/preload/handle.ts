@@ -27,6 +27,8 @@ const validChannels = [
   'onMergeVideo',
   //打开文件夹
   'onOpenDir',
+  //收藏视频
+  'onHandleStarVideo',
 ]
 
 const myElectron = {}

@@ -14,6 +14,7 @@ const {
   onGetListData,
   onCreateDir,
   onHandleDeleteFile,
+  onHandleStarVideo,
 } = window.myElectron;
 
 onMounted(() => {
@@ -188,7 +189,7 @@ async function configVideoListData() {
   document.querySelector(".plyr__title")!.innerHTML = videoDataList.value[0].name;
 }
 
-const deleteFile = (item) => {
+const deleteFile = (item, index) => {
   ElMessageBox.confirm("你确定要删除当前视频?", "温馨提醒", {
     confirmButtonText: "删除",
     cancelButtonText: "取消",
@@ -200,7 +201,11 @@ const deleteFile = (item) => {
         type: "success",
         message: "删除成功",
       });
-      await configVideoListData();
+      //马上切换一个视频避免删除当前视频后，当前视频还在播放，会出现占用的问题，不允许删除
+      video.value = videoDataList.value[index + 1].url;
+      setTimeout(async () => {
+        await configVideoListData();
+      }, 500)
     })
     .catch(() => {
       ElMessage({
@@ -209,6 +214,16 @@ const deleteFile = (item) => {
       });
     });
 };
+//收藏视频
+const starVideo = async (item) => {
+  onHandleStarVideo(item.name);
+  ElMessage({
+    type: "success",
+    message: "收藏成功",
+  });
+  await configVideoListData();
+}
+
 </script>
 
 <template>
@@ -230,11 +245,11 @@ const deleteFile = (item) => {
           </video>
         </div>
       </el-main>
-      <el-aside class="coverList" width="380px">
+      <el-aside class="coverList" width="400px">
         <ul>
-          <li v-for="(item, index) in videoDataList" :key="index" @mouseenter="handleMouse('enter', index)"
+          <li v-for="(item, index) in  videoDataList " :key="index" @mouseenter="handleMouse('enter', index)"
             @mouseleave="handleMouse('leave', index)" @click="handleMouse('click', index)"
-            v-show="listVideoHasObj.filters[index]">
+            v-show="listVideoHasObj.filters[index]" :class="{ star: item.isStar, acitve: item.url == video }">
             <video v-if="listVideoHasObj.showPreview[index]" autoplay muted :src="item.preview"></video>
             <img v-else :src="item.cover" alt="" />
             <h4>
@@ -245,14 +260,19 @@ const deleteFile = (item) => {
               <span>{{ item.datails.time }}</span>
               <span>{{ item.datails.size }}</span>
             </span>
-            <button class="deleteFile" @click="deleteFile(item)">删除</button>
+            <div class="videoTools">
+              <button class="starVideo" @click="starVideo(item)">
+                <LzyIcon name="system-uicons:star-outline" />{{ item.isStar ? '取消收藏' : '收藏' }}
+              </button>
+              <button class="deleteFile" @click="deleteFile(item, index)">删除</button>
+            </div>
           </li>
         </ul>
       </el-aside>
     </el-container>
     <el-dialog v-model="setDialog" :close-on-click-modal="false" title="设置" width="40%">
       <div class="content">
-        <p v-for="(item, index) in dirPath" :key="index">
+        <p v-for="( item, index ) in  dirPath " :key="index">
           <span>{{ item.name }}</span>
           <input @click="getDirPath(index)" v-model="item.path" />
           <LzyIcon :name="item.icon" title="打开文件夹" style="vertical-align: -7.5" />
@@ -265,9 +285,9 @@ const deleteFile = (item) => {
     </el-dialog>
     <el-dialog class="listContent" v-model="listDialog" :fullscreen="true" title="Warning" width="100%" align-center>
       <ul>
-        <li v-for="(item, index) in videoDataList" :key="index" @mouseenter="handleMouse('enter', index)"
+        <li v-for="( item, index ) in  videoDataList " :key="index" @mouseenter="handleMouse('enter', index)"
           @mouseleave="handleMouse('leave', index)" @click="handleMouse('click', index)"
-          v-show="listVideoHasObj.filters[index]">
+          v-show="listVideoHasObj.filters[index]" :class="{ star: item.isStar }">
           <video v-if="listVideoHasObj.showPreview[index]" autoplay muted :src="item.preview"></video>
           <img v-else :src="item.cover" alt="" />
 
@@ -455,25 +475,34 @@ ul {
     /* 设置为 0，禁止收缩 */
     cursor: pointer;
     border-radius: 10px;
-    padding: 5px 5px 0 5px;
+    padding: 5px;
     position: relative;
     margin: 0 5px;
     box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1), 0 -1px 1px rgba(0, 0, 0, 0.1);
-    border: 1px solid #ddd;
+    border: 3px solid transparent;
     display: grid;
     grid-template-rows: 210px 1fr 20px 30px;
     gap: 10px;
 
-    &.acitve::after {
-      content: "";
-      width: 50px;
-      height: 50px;
-      position: absolute;
-      top: 121px;
-      left: 50%;
-      translate: -50% -50%;
-      background: url(./play.png) no-repeat;
-      background-size: 100%;
+    &.star {
+      border: 3px solid #db4080;
+
+      &::after {
+        content: '收藏';
+        position: absolute;
+        top: 0;
+        right: 0;
+        background-color: #db4080;
+        color: #fff;
+        font-size: 15px;
+        font-family: 'almama';
+        padding: 0 20px;
+        border-radius: 0 0 0 10px;
+      }
+    }
+
+    &.acitve {
+      border: 3px solid var(--themeColor);
     }
 
     video,
@@ -482,12 +511,30 @@ ul {
       width: 328px;
     }
 
-    .deleteFile {
-      width: 100%;
-      border-radius: 0.5rem;
-      background-color: rgb(255, 74, 74);
-      color: #fff;
+    .videoTools {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      padding: 0 5px;
+
+      .starVideo {
+        background-color: var(--themeColor);
+      }
+
+      .deleteFile {
+        background-color: rgb(255, 74, 74);
+      }
+
+      button {
+        color: #fff;
+        border-radius: 0.5rem;
+
+        &:hover {
+          backdrop-filter: brightness(11);
+        }
+      }
     }
+
+
 
     h4 {
       /* height: 135px; */

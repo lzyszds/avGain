@@ -848,6 +848,7 @@ class WindowManager {
     this.registerHandleDeleteFile();
     this.registeronMergeVideo();
     this.registerOpenDir();
+    this.registerHandleStarVideo();
   }
   // 处理窗口操作请求
   handleWinAction(arg) {
@@ -970,11 +971,15 @@ class WindowManager {
     const json = JSON.parse(storeFile);
     const { coverPath, previewPath, videoPath } = json;
     this.pathJson = json;
+    const existArr = fs.readdirSync(videoPath);
     const coverList = fs.readdirSync(coverPath).map((file) => {
       if (!file.startsWith(".") && file.indexOf("Thumbs") == 0)
         return null;
       if (file.indexOf(".png") == -1) {
         const name = file.split(".jpg")[0];
+        if (existArr.indexOf(`${name}.mp4`) != -1) {
+          existArr.splice(existArr.indexOf(`${name}.mp4`), 1);
+        }
         let stat = null, datails = null;
         try {
           stat = fs.statSync(`${videoPath}/${name}.mp4`);
@@ -995,13 +1000,23 @@ class WindowManager {
           cover: `${coverPath}/${name}.jpg`,
           preview: `${previewPath}/${name}.mp4`,
           url: `${videoPath}/${name}.mp4`,
-          datails
+          datails,
+          isStar: json.starArr.indexOf(name) != -1
         };
       } else {
         return null;
       }
     }).filter((item) => item !== null);
-    return quickSortByTimestamp(coverList.filter((res) => res), "stampTime", false);
+    console.log(existArr);
+    existArr.forEach((item) => {
+      const videoId = getVideoId(item);
+      if (videoId) {
+        const name = item.split(".mp4")[0];
+        getPreviewVideo(videoId, name, 0, previewPath, coverPath);
+      }
+    });
+    const videoListData = quickSortByTimestamp(coverList.filter((res) => res), "stampTime", false);
+    return videoListData.filter((res) => !res.isStar).concat(videoListData.filter((res) => res.isStar));
   }
   //注册onGetListData事件监听
   registerGetListData() {
@@ -1050,7 +1065,7 @@ class WindowManager {
             clearTimeout(timer);
           timer = setTimeout(async () => {
             if (downLoadPlan >= thread - 3) {
-              await mergeWithTimeout(name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation);
+              await mergeWithTimeout(name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation, event);
               if (timer)
                 clearTimeout(timer);
               resolve("下载完成");
@@ -1220,7 +1235,15 @@ class WindowManager {
     fs.access(`${videoPath}/${name}.mp4`, (err) => {
       if (err)
         return console.log("文件不存在");
-      fs.unlinkSync(`${videoPath}/${name}.mp4`);
+      try {
+        fs.unlinkSync(`${videoPath}/${name}.mp4`);
+      } catch (e) {
+        if (e)
+          console.log("删除文件失败", e.message);
+        setTimeout(() => {
+          fs.unlinkSync(`${videoPath}/${name}.mp4`);
+        }, 500);
+      }
     });
     fs.access(`${previewPath}/${name}.mp4`, (err) => {
       if (err)
@@ -1262,6 +1285,32 @@ class WindowManager {
   }
   registerOpenDir() {
     require$$3.ipcMain.handle("onOpenDir", this.onOpenDir.bind(this));
+  }
+  //收藏视频
+  onHandleStarVideo(event, arg) {
+    const storePath = path$1.join(this.app.getPath("documents"), "javPlayer");
+    const storeFilePath = path$1.join(storePath, "storeLog.json");
+    const storeFile = fs.readFileSync(storeFilePath, "utf-8");
+    const storeData = JSON.parse(storeFile);
+    let starArr = storeData.starArr;
+    if (!starArr) {
+      starArr = [arg];
+    } else {
+      if (starArr.indexOf(arg) != -1) {
+        starArr.splice(starArr.indexOf(arg), 1);
+        return fs.writeFileSync(storeFilePath, JSON.stringify(Object.assign(storeData, {
+          starArr
+        })), "utf-8");
+      }
+      starArr.push(arg);
+    }
+    console.log(`lzy  starArr:`, starArr);
+    fs.writeFileSync(storeFilePath, JSON.stringify(Object.assign(storeData, {
+      starArr
+    })), "utf-8");
+  }
+  registerHandleStarVideo() {
+    require$$3.ipcMain.handle("onHandleStarVideo", this.onHandleStarVideo.bind(this));
   }
 }
 function getHeaders(resource) {
@@ -1368,7 +1417,7 @@ async function processM3u8(url2, headers) {
   }
 }
 async function mergeWithTimeout(...arg) {
-  const [name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation] = arg;
+  const [name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation, event] = arg;
   const resultText = await merge(name, downPath, videoPath, thread);
   console.log("有部分视频没有下载完全");
   if (resultText == "合成成功") {
