@@ -29,6 +29,8 @@ const validChannels = [
   'onOpenDir',
   //收藏视频
   'onHandleStarVideo',
+  //获取当前所有的文件夹配置路径
+  'onGetAllDirPath',
 ]
 
 const myElectron = {}

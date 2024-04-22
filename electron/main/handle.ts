@@ -20,7 +20,7 @@ export class WindowManager {
     coverPath: string,
     previewPath: string,
     videoPath: string,
-    videoDownload: string
+    downloadPath: string
   };
   private downloadPlanArr: any;
 
@@ -38,25 +38,25 @@ export class WindowManager {
       coverPath: '',
       previewPath: '',
       videoPath: '',
-      videoDownload: ''
+      downloadPath: ''
     }
     //下载计划数组
     this.downloadPlanArr = []
     // 注册事件监听
-    // 窗口操作
-    this.registerHandleWin();
-    this.registerHandleOpenDir()
-    this.registerHandleStoreData()
-    this.registerGetListData()
-    this.registerDownloadVideoEvent()
-    this.registerGetDownloadSpeed()
-    this.registerGetDownloadListContent()
-    this.registerDeleteDirFile()
-    this.registerCreateDir()
-    this.registerHandleDeleteFile()
-    this.registeronMergeVideo()
-    this.registerOpenDir()
-    this.registerHandleStarVideo()
+    this.registerHandleWin();//窗口操作
+    this.registerHandleOpenDir()//获取文件夹路径
+    this.registerHandleStoreData()//存储数据进入系统存储文件夹
+    this.registerGetListData()//获取视频列表数据
+    this.registerDownloadVideoEvent()//下载视频
+    this.registerGetDownloadSpeed()//下载进度获取
+    this.registerGetDownloadListContent()//获取下载目录内容
+    this.registerDeleteDirFile()//清除文件夹内的内容
+    this.registerCreateDir()//创建文件夹
+    this.registerHandleDeleteFile()//删除视频文件
+    this.registeronMergeVideo()//合并视频
+    this.registerOpenDir()//打开文件夹
+    this.registerHandleStarVideo()//收藏视频
+    this.registerGetAllDirPath()//获取当前所有的文件夹配置路径
   }
 
   // 处理窗口操作请求
@@ -166,6 +166,7 @@ export class WindowManager {
     if (typeof data === 'string') {
       const storeFilePath = path.join(storePath, 'storeLog.json')
       const storeFile = fs.readFileSync(storeFilePath, 'utf-8')
+      if (!storeFile) return null
       const json = JSON.parse(storeFile)
       return json[data]
     } else {
@@ -189,12 +190,13 @@ export class WindowManager {
   }
   //处理onGetListData事件
   private async onGetListData(event: Electron.IpcMainInvokeEvent, arg: string) {
-    const storePath = path.join(this.app.getPath('documents'), 'javPlayer')
-    const storeFilePath = path.join(storePath, 'storeLog.json')
-    const storeFile = fs.readFileSync(storeFilePath, 'utf-8')
-    const json = JSON.parse(storeFile)
-    const { coverPath, previewPath, videoPath } = json
-    this.pathJson = json
+
+    const { coverPath,
+      previewPath,
+      videoPath,
+      starArr
+    } = this.onGetAllDirPath(event, 'all')
+
     //获取视频列表 解决有些视频没有封面的问题
     const existArr = fs.readdirSync(videoPath)
     const coverList = fs.readdirSync(coverPath).map((file: any) => {
@@ -220,7 +222,6 @@ export class WindowManager {
             size: formatFileSize(stat.size),
           }
         }
-
         return {
           stampTime: stat ? stat!.birthtimeMs : null,
           name: name,
@@ -228,7 +229,7 @@ export class WindowManager {
           preview: `${previewPath}/${name}.mp4`,
           url: `${videoPath}/${name}.mp4`,
           datails,
-          isStar: json.starArr.indexOf(name) != -1
+          isStar: starArr.indexOf(name) != -1
         }
       } else {
         return null
@@ -278,6 +279,9 @@ export class WindowManager {
 
       //截取番号出来
       const designation = getVideoId(name)
+      downPath = downPath + `/${designation}`;
+      mkdirsSync(downPath);
+
 
       // 从M3U8 URL计算出需要下载的视频文件信息。
       const { videoName, urlPrefix, dataArr } = await processM3u8(url, headers);
@@ -614,6 +618,34 @@ export class WindowManager {
   }
   private registerHandleStarVideo(): void {
     ipcMain.handle('onHandleStarVideo', this.onHandleStarVideo.bind(this));
+  }
+
+  //获取当前所有的文件夹配置路径
+  private onGetAllDirPath(event: Electron.IpcMainInvokeEvent, arg: any) {
+    const storePath = path.join(this.app.getPath('documents'), 'javPlayer')
+    const storeFilePath = path.join(storePath, 'storeLog.json')
+    const storeFile = fs.readFileSync(storeFilePath, 'utf-8')
+    //如果没有存储文件数据，则创建一个空的存储文件
+    if (!storeFile) {
+      createSystemStore(this.app)
+      return this.onGetAllDirPath(event, arg)
+    }
+    const json = JSON.parse(storeFile)
+    const { coverPath, previewPath, videoPath, downloadPath } = json
+    this.pathJson = {
+      coverPath,
+      previewPath,
+      videoPath,
+      downloadPath
+    }
+    //如果传入的参数是all 则返回所有的路径
+    if (arg === 'all') {
+      return json
+    }
+    return this.pathJson
+  }
+  private registerGetAllDirPath(): void {
+    ipcMain.handle('onGetAllDirPath', this.onGetAllDirPath.bind(this));
   }
 }
 

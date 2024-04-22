@@ -15,12 +15,12 @@ import VueJsTour from '@globalhive/vuejs-tour';
 import '@globalhive/vuejs-tour/dist/style.css';
 
 import { router } from "@/router/index";
-import BtnVue from './components/Btn.vue'
+import LzyBtn from './components/LzyBtn.vue'
 
 
 createApp(App)
   .component('LzyIcon', LzyIcon)
-  .component('LzyBtn', BtnVue)
+  .component('LzyBtn', LzyBtn)
   .use(router).use(ElementPlus).use(VueJsTour)
   .mount('#app')
 

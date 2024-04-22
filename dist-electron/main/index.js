@@ -738,10 +738,11 @@ const createSystemStore = (app) => {
   }
   if (!fs.existsSync(path.join(systemStore, "storeLog.json"))) {
     fs.writeFileSync(path.join(systemStore, "storeLog.json"), `{
-      "coverPath": "L:/av/public/cover",
-      "previewPath": "L:/av/public/preview",
-      "videoPath": "L:/av/public/video",
-      "downloadPath": "L:/av/public/videoDownload"
+      "coverPath": "",
+      "previewPath": "",
+      "videoPath": "",
+      "downloadPath": "",
+      "starArr": []
     }`, "utf-8");
   }
   return systemStore;
@@ -833,7 +834,7 @@ class WindowManager {
       coverPath: "",
       previewPath: "",
       videoPath: "",
-      videoDownload: ""
+      downloadPath: ""
     };
     this.downloadPlanArr = [];
     this.registerHandleWin();
@@ -849,6 +850,7 @@ class WindowManager {
     this.registeronMergeVideo();
     this.registerOpenDir();
     this.registerHandleStarVideo();
+    this.registerGetAllDirPath();
   }
   // 处理窗口操作请求
   handleWinAction(arg) {
@@ -944,6 +946,8 @@ class WindowManager {
     if (typeof data === "string") {
       const storeFilePath = path$1.join(storePath, "storeLog.json");
       const storeFile = fs.readFileSync(storeFilePath, "utf-8");
+      if (!storeFile)
+        return null;
       const json = JSON.parse(storeFile);
       return json[data];
     } else {
@@ -965,12 +969,12 @@ class WindowManager {
   }
   //处理onGetListData事件
   async onGetListData(event, arg) {
-    const storePath = path$1.join(this.app.getPath("documents"), "javPlayer");
-    const storeFilePath = path$1.join(storePath, "storeLog.json");
-    const storeFile = fs.readFileSync(storeFilePath, "utf-8");
-    const json = JSON.parse(storeFile);
-    const { coverPath, previewPath, videoPath } = json;
-    this.pathJson = json;
+    const {
+      coverPath,
+      previewPath,
+      videoPath,
+      starArr
+    } = this.onGetAllDirPath(event, "all");
     const existArr = fs.readdirSync(videoPath);
     const coverList = fs.readdirSync(coverPath).map((file) => {
       if (!file.startsWith(".") && file.indexOf("Thumbs") == 0)
@@ -1001,7 +1005,7 @@ class WindowManager {
           preview: `${previewPath}/${name}.mp4`,
           url: `${videoPath}/${name}.mp4`,
           datails,
-          isStar: json.starArr.indexOf(name) != -1
+          isStar: starArr.indexOf(name) != -1
         };
       } else {
         return null;
@@ -1036,6 +1040,8 @@ class WindowManager {
       name = sanitizeVideoName(name);
       let downLoadPlan = 0, timer = null;
       const designation = getVideoId(name);
+      downPath = downPath + `/${designation}`;
+      mkdirsSync(downPath);
       const { videoName, urlPrefix, dataArr } = await processM3u8(url2, headers);
       if (dataArr.length === 0) {
         console.log("无法验证第一个证书");
@@ -1312,6 +1318,31 @@ class WindowManager {
   registerHandleStarVideo() {
     require$$3.ipcMain.handle("onHandleStarVideo", this.onHandleStarVideo.bind(this));
   }
+  //获取当前所有的文件夹配置路径
+  onGetAllDirPath(event, arg) {
+    const storePath = path$1.join(this.app.getPath("documents"), "javPlayer");
+    const storeFilePath = path$1.join(storePath, "storeLog.json");
+    const storeFile = fs.readFileSync(storeFilePath, "utf-8");
+    if (!storeFile) {
+      createSystemStore(this.app);
+      return this.onGetAllDirPath(event, arg);
+    }
+    const json = JSON.parse(storeFile);
+    const { coverPath, previewPath, videoPath, downloadPath } = json;
+    this.pathJson = {
+      coverPath,
+      previewPath,
+      videoPath,
+      downloadPath
+    };
+    if (arg === "all") {
+      return json;
+    }
+    return this.pathJson;
+  }
+  registerGetAllDirPath() {
+    require$$3.ipcMain.handle("onGetAllDirPath", this.onGetAllDirPath.bind(this));
+  }
 }
 function getHeaders(resource) {
   let headers = {
@@ -1554,7 +1585,7 @@ require$$3.ipcMain.handle("open-win", (_, arg) => {
 });
 function createLoadingWindow() {
   loadingWindow = new require$$3.BrowserWindow({
-    width: 400,
+    width: 1e3,
     // 设置窗口宽度为400
     height: 600,
     // 设置窗口高度为600

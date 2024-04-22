@@ -5,9 +5,7 @@ import { useRouter } from "vue-router";
 import LzyIcon from "@/components/LzyIcon.vue";
 import { ElMessageBox, ElMessage } from "element-plus";
 import { Videodatalist, listVideoHasObj } from "./Home";
-
-// 获取本地存储的数据
-
+import { LzyAlert, LzyConfirm } from "@/utils";
 const {
   onHandleStoreData,
   onHandleOpenDir,
@@ -15,39 +13,43 @@ const {
   onCreateDir,
   onHandleDeleteFile,
   onHandleStarVideo,
+  onGetAllDirPath,
 } = window.myElectron;
 
 onMounted(() => {
-  const player = new Plyr("#video", {
-    disableContextMenu: false,
-    /* selected：默认播放速度。options：在 UI 中显示的速度选项。YouTube 和 Vimeo 将忽略 0.5-2 范围之外的任何选项，因此该范围之外的选项将自动隐藏。 */
-    // selected: 1,
-    // options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 4],
-    /* enabled：允许使用本地存储来存储用户设置。key：要使用的键名称。 */
-    enabled: true,
-    displayDuration: false,
-    // key: "plyr",
-    /* 将当前时间显示为倒计时而不是增量计数器。 */
-    invertTime: true,
-    //快捷键 启用
-    keyboard: {
-      focused: true,
-      global: true,
-    },
-    storage: {
+  let player;
+  try {
+    player = new Plyr("#video", {
+      disableContextMenu: false,
+      /* selected：默认播放速度。options：在 UI 中显示的速度选项。YouTube 和 Vimeo 将忽略 0.5-2 范围之外的任何选项，因此该范围之外的选项将自动隐藏。 */
+      // selected: 1,
+      // options: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 4],
+      /* enabled：允许使用本地存储来存储用户设置。key：要使用的键名称。 */
       enabled: true,
-      key: "plyr",
-    },
-    /* 默认音量 */
-    volume: Number(JSON.parse(localStorage.getItem("plyr")!).volume) || 0.5,
-    /* 快进时间 */
-    seekTime: 10,
-    /* 播放速度 */
-    speed: {
-      selected: 1.5,
-      options: [0.75, 1.5, 2, 2.5],
-    },
-  });
+      displayDuration: false,
+      // key: "plyr",
+      /* 将当前时间显示为倒计时而不是增量计数器。 */
+      invertTime: true,
+      //快捷键 启用
+      keyboard: {
+        focused: true,
+        global: true,
+      },
+      storage: {
+        enabled: true,
+        key: "plyr",
+      },
+      /* 默认音量 */
+      volume: Number(JSON.parse(localStorage.getItem("plyr")!).volume) || 0.5,
+      /* 快进时间 */
+      seekTime: 10,
+      /* 播放速度 */
+      speed: {
+        selected: 1.5,
+        options: [0.75, 1.5, 2, 2.5],
+      },
+    });
+  } catch (err) {}
   window!.player = player;
   setTimeout(async () => {
     //获取video元素
@@ -65,12 +67,8 @@ onMounted(() => {
       // 初始化数据
       await configVideoListData();
     } else {
-      dirPath.cover.path = "L:/av/public/cover";
-      dirPath.preview.path = "L:/av/public/preview";
-      dirPath.video.path = "L:/av/public/video";
-      dirPath.videoDownload.path = "L:/av/public/videoDownload";
+      setDialog.value = true;
     }
-    player.speed = Number(JSON.parse(localStorage.getItem("plyr")!).speed) || 1;
   }, 500);
 });
 const router = useRouter(); //路由
@@ -96,7 +94,7 @@ const toolHandle = [
   {
     tipsContent: "切换模式",
     icon: "basil:exchange-solid",
-    handle: () => { },
+    handle: () => {},
   },
   {
     tipsContent: "目录列表",
@@ -113,6 +111,14 @@ const toolHandle = [
     },
   },
 ];
+
+// 获取当前所有的文件夹配置路径 如果不存在则弹出设置弹窗
+const dirPathArr = await onGetAllDirPath();
+console.log(`lzy  dirPathArr:`, dirPathArr);
+if (!dirPathArr.coverPath) {
+  setDialog.value = true;
+}
+
 //获取本地存储的数据
 const dirPath = reactive({
   cover: {
@@ -136,6 +142,7 @@ const dirPath = reactive({
     icon: "basil:folder-open-outline",
   },
 });
+
 //获取文件夹路径 并存储到本地
 const getDirPath = async (type: string) => {
   dirPath[type].path = (await onHandleOpenDir()) || dirPath[type].path;
@@ -147,11 +154,24 @@ const saveDirPath = async () => {
   await onHandleStoreData({ videoPath: dirPath.video.path });
   await onHandleStoreData({ downloadPath: dirPath.videoDownload.path });
   setDialog.value = false;
+  // 刷新视频数据
+  await configVideoListData();
 };
+
+//创建文件夹
 const createDirFn = async () => {
   let userSelectPath = await onHandleOpenDir();
   for (let key of ["cover", "preview", "video", "videoDownload"]) {
     await onCreateDir(userSelectPath + "\\" + key);
+    dirPath[key].path = userSelectPath + "\\" + key;
+  }
+  await saveDirPath();
+};
+
+//选中父目录
+const selectDir = async () => {
+  let userSelectPath = await onHandleOpenDir();
+  for (let key of ["cover", "preview", "video", "videoDownload"]) {
     dirPath[key].path = userSelectPath + "\\" + key;
   }
   await saveDirPath();
@@ -166,7 +186,8 @@ const handleMouse = (type: string, index: number) => {
   } else if (type === "click") {
     video.value = videoDataList.value[index].url;
     listDialog.value = false;
-    document.querySelector(".plyr__title")!.innerHTML = videoDataList.value[index].name;
+    document.querySelector(".plyr__title")!.innerHTML =
+      videoDataList.value[index].name;
   }
 };
 
@@ -179,40 +200,50 @@ const searchHandle = () => {
 };
 async function configVideoListData() {
   // 获取视频数据
-  videoDataList.value = await onGetListData();
+  try {
+    videoDataList.value = await onGetListData();
+  } catch (err) {
+    LzyAlert({
+      title: "温馨提示",
+      content: "视频文件夹路径错误，请重新设置",
+      type: "warning",
+      confirmButtonText: "确定",
+      confirm: () => {
+        setDialog.value = true;
+      },
+    });
+  }
   // 初始化视频数据
   listVideoHasObj.showPreview.length = videoDataList.value.length;
   listVideoHasObj.filters.length = videoDataList.value.length;
   listVideoHasObj.filters.fill(true);
   // 初始化视频播放
   video.value = videoDataList.value[0].url;
-  document.querySelector(".plyr__title")!.innerHTML = videoDataList.value[0].name;
+  document.querySelector(".plyr__title")!.innerHTML =
+    videoDataList.value[0].name;
 }
 
 const deleteFile = (item, index) => {
-  ElMessageBox.confirm("你确定要删除当前视频?", "温馨提醒", {
-    confirmButtonText: "删除",
-    cancelButtonText: "取消",
+  LzyConfirm({
+    title: "温馨提示",
+    content: "是否删除该视频",
     type: "error",
-  })
-    .then(async () => {
-      onHandleDeleteFile(item.name);
+    confirmButtonText: "确定",
+    confirm: async () => {
+      await onHandleDeleteFile(item.url);
       ElMessage({
         type: "success",
         message: "删除成功",
       });
-      //马上切换一个视频避免删除当前视频后，当前视频还在播放，会出现占用的问题，不允许删除
-      video.value = videoDataList.value[index + 1].url;
-      setTimeout(async () => {
-        await configVideoListData();
-      }, 500)
-    })
-    .catch(() => {
+      await configVideoListData();
+    },
+    error: () => {
       ElMessage({
-        type: "success",
-        message: "取消删除",
+        type: "error",
+        message: "删除失败",
       });
-    });
+    },
+  });
 };
 //收藏视频
 const starVideo = async (item) => {
@@ -222,8 +253,7 @@ const starVideo = async (item) => {
     message: "收藏成功",
   });
   await configVideoListData();
-}
-
+};
 </script>
 
 <template>
@@ -231,26 +261,58 @@ const starVideo = async (item) => {
     <el-container>
       <el-main>
         <div class="toHref">
-          <LzyBtn v-for="(item, index) in toolHandle" :key="index" :icon="item.icon" :tipsContent="item.tipsContent"
-            :handle="item.handle"></LzyBtn>
+          <LzyBtn
+            v-for="(item, index) in toolHandle"
+            :key="index"
+            :icon="item.icon"
+            :tipsContent="item.tipsContent"
+            :handle="item.handle"
+          ></LzyBtn>
           <div class="search">
-            <ElInput v-model="search" @keydown.enter="searchHandle" size="small">
+            <ElInput
+              v-model="search"
+              @keydown.enter="searchHandle"
+              size="small"
+            >
             </ElInput>
-            <LzyBtn class="lzyIcon" icon="basil:search-outline" :handle="searchHandle"></LzyBtn>
+            <LzyBtn
+              class="lzyIcon"
+              icon="basil:search-outline"
+              :handle="searchHandle"
+            ></LzyBtn>
           </div>
         </div>
         <div class="videoContent">
-          <video id="video" :src="video" style="display: none" controls crossorigin="" playsinline poster="">
+          <video
+            id="video"
+            :src="video"
+            style="display: none"
+            controls
+            crossorigin=""
+            playsinline
+            poster=""
+          >
             <source type="video/mp4" />
           </video>
         </div>
       </el-main>
       <el-aside class="coverList" width="400px">
         <ul>
-          <li v-for="(item, index) in  videoDataList " :key="index" @mouseenter="handleMouse('enter', index)"
-            @mouseleave="handleMouse('leave', index)" @click="handleMouse('click', index)"
-            v-show="listVideoHasObj.filters[index]" :class="{ star: item.isStar, acitve: item.url == video }">
-            <video v-if="listVideoHasObj.showPreview[index]" autoplay muted :src="item.preview"></video>
+          <li
+            v-for="(item, index) in videoDataList"
+            :key="index"
+            @mouseenter="handleMouse('enter', index)"
+            @mouseleave="handleMouse('leave', index)"
+            @click="handleMouse('click', index)"
+            v-show="listVideoHasObj.filters[index]"
+            :class="{ star: item.isStar, acitve: item.url == video }"
+          >
+            <video
+              v-if="listVideoHasObj.showPreview[index]"
+              autoplay
+              muted
+              :src="item.preview"
+            ></video>
             <img v-else :src="item.cover" alt="" />
             <h4>
               {{ item.name }}
@@ -262,33 +324,77 @@ const starVideo = async (item) => {
             </span>
             <div class="videoTools">
               <button class="starVideo" @click="starVideo(item)">
-                <LzyIcon name="system-uicons:star-outline" />{{ item.isStar ? '取消收藏' : '收藏' }}
+                <LzyIcon name="system-uicons:star-outline" />{{
+                  item.isStar ? "取消收藏" : "收藏"
+                }}
               </button>
-              <button class="deleteFile" @click="deleteFile(item, index)">删除</button>
+              <button class="deleteFile" @click="deleteFile(item, index)">
+                删除
+              </button>
             </div>
           </li>
         </ul>
       </el-aside>
     </el-container>
-    <el-dialog v-model="setDialog" :close-on-click-modal="false" title="设置" width="40%">
+    <el-dialog
+      v-model="setDialog"
+      :close-on-click-modal="false"
+      title="设置"
+      width="40%"
+    >
       <div class="content">
-        <p v-for="( item, index ) in  dirPath " :key="index">
+        <p v-for="(item, index) in dirPath" :key="index">
           <span>{{ item.name }}</span>
           <input @click="getDirPath(index)" v-model="item.path" />
-          <LzyIcon :name="item.icon" title="打开文件夹" style="vertical-align: -7.5" />
+          <LzyIcon
+            :name="item.icon"
+            title="打开文件夹"
+            style="vertical-align: -7.5"
+          />
         </p>
       </div>
       <template #footer>
-        <LzyBtn @click="createDirFn" title="一键生成文件夹" icon="system-uicons:episodes"></LzyBtn>
-        <LzyBtn @click="saveDirPath" title="保存" icon="basil:save-outline"></LzyBtn>
+        <LzyBtn
+          @click="createDirFn"
+          title="一键生成文件夹"
+          icon="system-uicons:episodes"
+        ></LzyBtn>
+        <LzyBtn
+          @click="saveDirPath"
+          title="保存"
+          icon="basil:save-outline"
+        ></LzyBtn>
+        <LzyBtn
+          @click="selectDir"
+          title="选择文件夹"
+          icon="basil:folder-open-solid"
+        ></LzyBtn>
       </template>
     </el-dialog>
-    <el-dialog class="listContent" v-model="listDialog" :fullscreen="true" title="Warning" width="100%" align-center>
+    <el-dialog
+      class="listContent"
+      v-model="listDialog"
+      :fullscreen="true"
+      title="Warning"
+      width="100%"
+      align-center
+    >
       <ul>
-        <li v-for="( item, index ) in  videoDataList " :key="index" @mouseenter="handleMouse('enter', index)"
-          @mouseleave="handleMouse('leave', index)" @click="handleMouse('click', index)"
-          v-show="listVideoHasObj.filters[index]" :class="{ star: item.isStar }">
-          <video v-if="listVideoHasObj.showPreview[index]" autoplay muted :src="item.preview"></video>
+        <li
+          v-for="(item, index) in videoDataList"
+          :key="index"
+          @mouseenter="handleMouse('enter', index)"
+          @mouseleave="handleMouse('leave', index)"
+          @click="handleMouse('click', index)"
+          v-show="listVideoHasObj.filters[index]"
+          :class="{ star: item.isStar }"
+        >
+          <video
+            v-if="listVideoHasObj.showPreview[index]"
+            autoplay
+            muted
+            :src="item.preview"
+          ></video>
           <img v-else :src="item.cover" alt="" />
 
           <h4>
@@ -452,7 +558,7 @@ const starVideo = async (item) => {
     }
   }
 
-  &>div.el-dialog__body {
+  & > div.el-dialog__body {
     height: 93vh;
     padding: 5px;
   }
@@ -488,14 +594,14 @@ ul {
       border: 3px solid #db4080;
 
       &::after {
-        content: '收藏';
+        content: "收藏";
         position: absolute;
         top: 0;
         right: 0;
         background-color: #db4080;
         color: #fff;
         font-size: 15px;
-        font-family: 'almama';
+        font-family: "almama";
         padding: 0 20px;
         border-radius: 0 0 0 10px;
       }
@@ -533,8 +639,6 @@ ul {
         }
       }
     }
-
-
 
     h4 {
       /* height: 135px; */

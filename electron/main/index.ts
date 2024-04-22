@@ -162,7 +162,7 @@ ipcMain.handle('open-win', (_, arg) => {
 // 创建加载窗口函数
 function createLoadingWindow() {
   loadingWindow = new BrowserWindow({
-    width: 400, // 设置窗口宽度为400
+    width: 1000, // 设置窗口宽度为400
     height: 600, // 设置窗口高度为600
     frame: false, // 窗口无边框
     skipTaskbar: false, // 不在任务栏显示窗口

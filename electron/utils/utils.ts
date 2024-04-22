@@ -52,10 +52,11 @@ export const createSystemStore = (app) => {
   //创建系统存储文件夹 如果不存在 则创建 并写入文件
   if (!fs.existsSync(join(systemStore, 'storeLog.json'))) {
     fs.writeFileSync(join(systemStore, 'storeLog.json'), `{
-      "coverPath": "L:/av/public/cover",
-      "previewPath": "L:/av/public/preview",
-      "videoPath": "L:/av/public/video",
-      "downloadPath": "L:/av/public/videoDownload"
+      "coverPath": "",
+      "previewPath": "",
+      "videoPath": "",
+      "downloadPath": "",
+      "starArr": []
     }`, 'utf-8')
   }
   return systemStore
