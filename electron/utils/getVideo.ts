@@ -24,7 +24,7 @@ function getVideo(urlData, i, index, urlPrefix, headers, path, docPath) {
       // 将二进制数据写入文件
       // 判断当前文件夹中是否有该文件
       // 如果有就直接写入
-      fs.appendFile(`${path}/${index}.ts`, buffer, async (err) => {
+      fs.appendFile(`${path}/${i}.ts`, buffer, async (err) => {
         if (err) {
           reject(err); // 将错误传递给 Promise 的拒绝处理
           return;

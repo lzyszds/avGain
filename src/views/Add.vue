@@ -1,11 +1,12 @@
 <script lang="ts" setup>
-import { reactive, ref, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
 import { ElNotification } from "element-plus";
 import LzyIcon from "@/components/LzyIcon.vue";
 import { useStorage } from "@vueuse/core";
 
 const el = window.myElectron;
-const ipcRenderer = window.ipcRenderer;
+
+await el.onGetAllDirPath();
 
 // setInterval(() => {
 //   console.log(ipcRenderer);
@@ -17,6 +18,7 @@ const coverPath = await el.onHandleStoreData("coverPath");
 const videoPath = await el.onHandleStoreData("videoPath");
 const rawData = await el.onHandleStoreData("downloadHistory");
 const downloadHistory = ref(JSON.parse(rawData || "[]"));
+
 //将历史记录里面的空数据删除
 downloadHistory.value = downloadHistory.value.filter((res) => res.name);
 
@@ -26,10 +28,19 @@ const sizeForm = useStorage("sizeForm", {
   url: "",
   thread: 10,
 });
-const alternateArr = useStorage("alternateArr", [{ name: "", url: "" }]);
 
-const percentage = ref(0);
-const progress = ref<number[]>([]);
+//获取本地存储中的下载进度
+const storeData = ref(await el.onGetDownloadProgress(sizeForm.value.name));
+
+const alternateArr = useStorage("alternateArr", [{ name: "", url: "" }]);
+const percentage = computed(() => {
+  return Number(
+    (
+      (storeData.value.downLoadAfter / storeData.value.downloadCount) *
+      100
+    ).toFixed(2)
+  );
+});
 
 const fileDirlist = ref<any>([]);
 const speedDownload = ref<string>();
@@ -39,7 +50,10 @@ const activeNames = ref(["1"]);
 //历史记录当前页数
 const newPage = ref(1);
 
+let timer,
+  downLoadAfterCopy: number[] = [];
 async function onSubmit() {
+  timer && clearInterval(timer);
   const { name, url } = sizeForm.value;
   if (!name || !url) return;
   ElNotification({
@@ -48,27 +62,45 @@ async function onSubmit() {
     type: "success",
   });
 
-  const storeData = (key, value) => {
+  const appStoreData = (key, value) => {
     el.onHandleStoreData({ [key]: JSON.stringify(value) });
   };
 
   if (!hasName(name)) {
     // 将对象转换为JSON字符串，并通过onHandleStoreData方法传递给el
-    storeData("DownLoadForm", { ...sizeForm.value });
+    appStoreData("DownLoadForm", { ...sizeForm.value });
     downloadHistory.value.unshift({ ...sizeForm.value });
-    storeData("downloadHistory", downloadHistory.value);
+    appStoreData("downloadHistory", downloadHistory.value);
   }
 
-  let timer;
   timer = setInterval(async () => {
-    const [a, b] = await el.getDownloadSpeed();
-    percentage.value = Number(((a / b) * 100).toFixed(2));
-    progress.value = [a, b];
-
-    // 更新下载列表内容
-    getDownloadListContent();
-    updateSpeedDownload();
-  }, 500);
+    storeData.value = await el.onGetDownloadProgress(name);
+    const { downLoadAfter: after, downloadCount: count } = storeData.value;
+    if (!downLoadAfterCopy[after]) {
+      downLoadAfterCopy[after] = 1;
+    } else {
+      downLoadAfterCopy[after] += 1;
+    }
+    if (downLoadAfterCopy[after] > 60) {
+      ElNotification({
+        title: "下载提示：",
+        message: "下载异常，已停止下载",
+        type: "error",
+      });
+      downLoadAfterCopy = [];
+    } else {
+      // 更新下载列表内容
+      getDownloadListContent();
+      updateSpeedDownload();
+    }
+    console.log(downLoadAfterCopy.length);
+    // 判断是否下载完成
+    if (after == count || downLoadAfterCopy.length === 0) {
+      timer && clearInterval(timer);
+      //视频下载完成后，将视频进行合并
+      el.onMergeVideo({ name });
+    }
+  }, 1000);
   try {
     // 使用 await 处理 promise
     const res = await el.downloadVideoEvent({
@@ -122,7 +154,7 @@ async function getDownloadListContent() {
   fileDirlist.value = await el.getDownloadListContent(downPath);
   //将其中的数据根据name进行排序
   fileDirlist.value.sort((a, b) => {
-    return a.name.replace(/\.ts/g, "") > b.name.replace(/\.ts/g, "") ? 1 : -1;
+    return a.downloadTime - b.downloadTime;
   });
 }
 //清空下载路径
@@ -132,16 +164,13 @@ function deleteDirFile() {
 }
 //合并视频（以解决视频不合并的问题）
 async function onMergeVideo() {
-  const { name, thread } = sizeForm.value;
+  const { name } = sizeForm.value;
   const msg = await el.onMergeVideo({
     name,
-    thread,
-    downPath,
-    videoPath,
   });
   ElNotification({
     title: "下载提示：",
-    message: msg + "合并完成，请等待下一个任务",
+    message: msg,
     position: "bottom-left",
     duration: 0,
   });
@@ -169,10 +198,11 @@ const updateSpeedDownload = () => {
   if (totalSize === oldSize) {
     return;
   }
-  const size = formatFileSize(totalSize - oldSize)
-  const sizeName = size
+  const size = formatFileSize(totalSize - oldSize);
+  const sizeName = size;
   // 格式化文件大小并更新速度下载值
-  speedDownload.value = Number(size.replace(/[KMGT]B/, "")) > 0 ? sizeName : "0.00B";
+  speedDownload.value =
+    Number(size.replace(/[KMGT]B/, "")) > 0 ? sizeName : "0.00B";
 
   oldSize = totalSize;
 };
@@ -181,7 +211,7 @@ const updateSpeedDownload = () => {
 const getDownloadSize = () => {
   let newSize = 0;
   fileDirlist.value.forEach((res) => {
-    newSize += res.state.size;
+    newSize += res.state;
   });
   return formatFileSize(newSize);
 };
@@ -225,7 +255,10 @@ function handleHistory(currentPage: number = 1): any {
   <div class="addWhole">
     <ul class="dirState">
       <li>
-        <lzy-icon name="solar:folder-with-files-broken" style="width: 12px; vertical-align: -6px" />
+        <lzy-icon
+          name="solar:folder-with-files-broken"
+          style="width: 12px; vertical-align: -6px"
+        />
         {{ downPath }}
       </li>
       <li class="dirContent" v-for="(item, index) in fileDirlist" :key="index">
@@ -233,13 +266,29 @@ function handleHistory(currentPage: number = 1): any {
           <lzy-icon name="ph:file-ts"></lzy-icon>
           {{ item.name }}
         </span>
-        <span>{{ formatFileSize(item.state.size) }}</span>
+        <span>{{ formatFileSize(item.state) }}</span>
       </li>
       <li class="tools">
-        <LzyBtn :handle="getDownloadListContent" title="刷新" icon="ant-design:reload-outlined"></LzyBtn>
-        <LzyBtn :handle="deleteDirFile" title="清空" icon="ant-design:delete-twotone"></LzyBtn>
-        <LzyBtn :title="getDownloadSize()" :handle="onOpenDir" icon="ic:baseline-insert-chart-outlined"></LzyBtn>
-        <LzyBtn :handle="onMergeVideo" title="合成" icon="gg:merge-horizontal"></LzyBtn>
+        <LzyBtn
+          :handle="getDownloadListContent"
+          title="刷新"
+          icon="ant-design:reload-outlined"
+        ></LzyBtn>
+        <LzyBtn
+          :handle="deleteDirFile"
+          title="清空"
+          icon="ant-design:delete-twotone"
+        ></LzyBtn>
+        <LzyBtn
+          :title="getDownloadSize()"
+          :handle="onOpenDir"
+          icon="ic:baseline-insert-chart-outlined"
+        ></LzyBtn>
+        <LzyBtn
+          :handle="onMergeVideo"
+          title="合成"
+          icon="gg:merge-horizontal"
+        ></LzyBtn>
       </li>
     </ul>
     <div class="addMain">
@@ -248,7 +297,13 @@ function handleHistory(currentPage: number = 1): any {
         <img src="../../public/logo.png" width="40" height="40" />
         <span class="av">AudioVideo_Gain</span>
       </h1>
-      <el-form ref="form" :model="sizeForm" label-width="auto" label-position="left" size="large">
+      <el-form
+        ref="form"
+        :model="sizeForm"
+        label-width="auto"
+        label-position="left"
+        size="large"
+      >
         <el-form-item label="资源来路">
           <el-radio-group v-model="sizeForm.resource">
             <el-radio border label="SuperJav" />
@@ -259,7 +314,12 @@ function handleHistory(currentPage: number = 1): any {
           <el-input v-model="sizeForm.name" />
         </el-form-item>
         <el-form-item label="下载地址">
-          <el-input v-model="sizeForm.url" :autosize="{ minRows: 3, maxRows: 5 }" type="textarea" spellcheck="false" />
+          <el-input
+            v-model="sizeForm.url"
+            :autosize="{ minRows: 3, maxRows: 5 }"
+            type="textarea"
+            spellcheck="false"
+          />
         </el-form-item>
         <el-form-item label="下载线程">
           <el-input v-model="sizeForm.thread" type="number" max="20" min="1" />
@@ -268,13 +328,24 @@ function handleHistory(currentPage: number = 1): any {
           <!-- v-show="speedDownload" -->
           <span style="text-align: left">下载速度：{{ speedDownload }}/s</span>
           <el-progress :text-inside="true" :percentage="percentage" />
-          <span>{{ progress[0] }}/{{ progress[1] }}</span>
+          <span>
+            {{ storeData.downLoadAfter }}/{{ storeData.downloadCount }}
+          </span>
           <button class="button download" @click="onSubmit" type="button">
             <span class="button__text">开始下载</span>
             <span class="button__icon">
-              <svg class="svg" fill="none" height="24" stroke="currentColor" stroke-linecap="round"
-                stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" width="24"
-                xmlns="http://www.w3.org/2000/svg">
+              <svg
+                class="svg"
+                fill="none"
+                height="24"
+                stroke="currentColor"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                viewBox="0 0 24 24"
+                width="24"
+                xmlns="http://www.w3.org/2000/svg"
+              >
                 <line x1="12" x2="12" y1="5" y2="19"></line>
                 <line x1="5" x2="19" y1="12" y2="12"></line>
               </svg>
@@ -282,22 +353,35 @@ function handleHistory(currentPage: number = 1): any {
           </button>
         </el-form-item>
       </el-form>
-      <el-button @click="addAlternate" type="primary" style="border-radius: 10px">
+      <el-button
+        @click="addAlternate"
+        type="primary"
+        style="border-radius: 10px"
+      >
         添加备选(备选内容会在下载完成后进行按顺序下载)
       </el-button>
       <div class="alternateList">
-        <el-card shadow="never" v-for="(item, index) in alternateArr" :key="index">
+        <el-card
+          shadow="never"
+          v-for="(item, index) in alternateArr"
+          :key="index"
+        >
           <p>{{ index + 1 }}</p>
           <el-form-item label="番号名字">
             <div class="alterTools">
               <el-input v-model="item.name" spellcheck="false" />
-              <el-button type="primary" @click="useAlternate(item)">更换备选</el-button>
+              <el-button type="primary" @click="useAlternate(item)"
+                >更换备选</el-button
+              >
             </div>
           </el-form-item>
           <el-form-item label="下载地址">
             <div class="alterTools">
               <el-input v-model="item.url" spellcheck="false" />
-              <el-button type="primary" @click="() => alternateArr.splice(index, 1)">
+              <el-button
+                type="primary"
+                @click="() => alternateArr.splice(index, 1)"
+              >
                 删除
               </el-button>
             </div>
@@ -307,7 +391,12 @@ function handleHistory(currentPage: number = 1): any {
     </div>
     <div class="footer">
       <el-collapse class="collapse" v-model="activeNames" :accordion="true">
-        <el-collapse-item v-for="(item, index) in handleHistory(newPage)" :key="index" :title="item.name" :name="index">
+        <el-collapse-item
+          v-for="(item, index) in handleHistory(newPage)"
+          :key="index"
+          :title="item.name"
+          :name="index"
+        >
           <div>
             {{ item.url }}
           </div>
@@ -315,8 +404,12 @@ function handleHistory(currentPage: number = 1): any {
       </el-collapse>
       <!-- 分页按钮 -->
       <div style="text-align: center; margin-top: 10px">
-        <el-pagination layout="prev, pager, next" :total="downloadHistory.length" :page-size="15"
-          @current-change="newPage = $event" />
+        <el-pagination
+          layout="prev, pager, next"
+          :total="downloadHistory.length"
+          :page-size="15"
+          @current-change="newPage = $event"
+        />
       </div>
     </div>
   </div>
@@ -461,7 +554,6 @@ ul {
   }
 
   :deep(.el-form-item--large) {
-
     .el-form-item__label,
     span {
       font-family: "almama";
@@ -524,7 +616,6 @@ ul {
     }
 
     .el-progress-bar__innerText {
-
       // color: var(--hoverColor);
       &::before {
         content: "下载进度：";

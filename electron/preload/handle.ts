@@ -13,8 +13,6 @@ const validChannels = [
   'onGetListData',
   //下载视频
   'downloadVideoEvent',
-  //下载进度获取
-  'getDownloadSpeed',
   //获取下载目录内容
   'getDownloadListContent',
   //清除文件夹内的内容
@@ -31,6 +29,8 @@ const validChannels = [
   'onHandleStarVideo',
   //获取当前所有的文件夹配置路径
   'onGetAllDirPath',
+  //当添加页面初始进来时，发送下载的进度和总数回去
+  'onGetDownloadProgress'
 ]
 
 const myElectron = {}

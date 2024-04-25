@@ -747,6 +747,61 @@ const createSystemStore = (app) => {
   }
   return systemStore;
 };
+const storeData = (app, data) => {
+  const systemStore = path.join(app.getPath("documents"), "javPlayer");
+  const config = path.join(systemStore, "storeLog.json");
+  console.log(`lzy  config:`, config);
+  let dataStr = JSON.stringify(data);
+  if (fs.existsSync(config)) {
+    let oldData = fs.readFileSync(config, "utf-8");
+    let oldDataObj = JSON.parse(oldData);
+    dataStr = JSON.stringify({ ...oldDataObj, ...data });
+  }
+  fs.writeFileSync(config, dataStr, "utf-8");
+};
+const getStoreData = (app) => {
+  const systemStore = path.join(app.getPath("documents"), "javPlayer");
+  const config = path.join(systemStore, "storeLog.json");
+  if (fs.existsSync(config)) {
+    let data = fs.readFileSync(config, "utf-8");
+    return JSON.parse(data);
+  }
+  return {};
+};
+function getFolderSize(dirname) {
+  let size = 0;
+  const files = fs.readdirSync(dirname);
+  files.forEach((file) => {
+    const filePath = path.join(dirname, file);
+    const stat = fs.statSync(filePath);
+    if (stat.isFile()) {
+      size += stat.size;
+    } else if (stat.isDirectory()) {
+      size += getFolderSize(filePath);
+    }
+  });
+  return size;
+}
+const checkFileFoundError = {
+  /**
+  * 辅助函数：检测错误提示中是否包含 "no such file or directory" 字符串
+  * @param {string | Error} e - 错误提示字符串或错误对象
+  * @returns {boolean} - 如果包含 "no such file or directory" 则返回 true，否则返回 false
+  */
+  checkFileNotFoundError(e) {
+    const errorMessage = typeof e === "string" ? e : e.message;
+    return errorMessage.includes("no such file or directory");
+  },
+  /**
+   * 辅助函数：检测错误提示中是否包含 "permission denied" 字符串
+   * @param {string | Error} e - 错误提示字符串或错误对象
+   * @returns {boolean} - 如果包含 "permission denied" 则返回 true，否则返回 false
+   */
+  checkPermissionDeniedError(e) {
+    const errorMessage = typeof e === "string" ? e : e.message;
+    return errorMessage.includes("permission denied");
+  }
+};
 function formatFileSize(fileSize) {
   const units = [
     "B",
@@ -787,33 +842,32 @@ function quickSortByTimestamp(arr, key, isIncremental = true) {
     return [...quickSortByTimestamp(greater, key, isIncremental), ...equal, ...quickSortByTimestamp(less, key, isIncremental)];
   }
 }
-async function merge(name, downPath, videoPath, thread, event) {
-  let filenames;
-  for (let i = 1; i <= thread; i++) {
-    const has = fs.existsSync(path$1.join(downPath, `/${i}.ts`));
-    if (has) {
-      if (i === 1) {
-        filenames = "1.ts";
+const ffmpeg = "ffmpeg";
+function merge(name, downPath, videoPath) {
+  const filenames = fs.readdirSync(downPath).filter((file) => fs.existsSync(path$1.join(downPath, file))).map((file) => file);
+  if (!filenames.length)
+    return "没有找到ts文件";
+  const options = [
+    "-i",
+    `concat:${filenames.join("|")}`,
+    "-c",
+    "copy",
+    "-bsf:a",
+    "aac_adtstoasc",
+    "-movflags",
+    "+faststart",
+    `${videoPath}/${name}.mp4`
+  ];
+  return new Promise((resolve, reject) => {
+    child_process.execFile(ffmpeg, options, { cwd: downPath, maxBuffer: 1024 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`执行错误: ${error}`);
+        reject("合成失败");
       } else {
-        filenames += `|${i}.ts`;
+        resolve("合成成功");
       }
-    }
-  }
-  if (filenames === void 0)
-    return;
-  const max = {
-    // 一次性最大缓存 不限制
-    maxBuffer: 1024 * 1024 * 1024,
-    cwd: downPath
-  };
-  const cmd = `cd ${downPath} && ffmpeg -i "concat:${filenames}" -c copy -bsf:a aac_adtstoasc -movflags +faststart ${videoPath}/${name}.mp4`;
-  try {
-    await child_process.exec(cmd, max);
-    return "合成成功";
-  } catch (e) {
-    console.log(e);
-    return "合成失败";
-  }
+    });
+  });
 }
 class WindowManager {
   /**
@@ -842,7 +896,6 @@ class WindowManager {
     this.registerHandleStoreData();
     this.registerGetListData();
     this.registerDownloadVideoEvent();
-    this.registerGetDownloadSpeed();
     this.registerGetDownloadListContent();
     this.registerDeleteDirFile();
     this.registerCreateDir();
@@ -851,6 +904,7 @@ class WindowManager {
     this.registerOpenDir();
     this.registerHandleStarVideo();
     this.registerGetAllDirPath();
+    this.registerGetDownloadProgress();
   }
   // 处理窗口操作请求
   handleWinAction(arg) {
@@ -954,8 +1008,8 @@ class WindowManager {
       const storeFilePath = path$1.join(storePath, "storeLog.json");
       const storeFile = fs.readFileSync(storeFilePath, "utf-8");
       if (storeFile) {
-        const storeData = JSON.parse(storeFile);
-        newdata = Object.assign(storeData, data);
+        const storeData2 = JSON.parse(storeFile);
+        newdata = Object.assign(storeData2, data);
       } else {
         createSystemStore(this.app);
         newdata = data;
@@ -1032,52 +1086,24 @@ class WindowManager {
     return new Promise(async (resolve, reject) => {
       const appPath = path$1.join(__dirname, `../../electron`);
       const docPath = path$1.join(this.app.getPath("documents"), "javPlayer");
-      fs.readdirSync(docPath + "/data").forEach((file) => {
-        fs.writeFileSync(docPath + "/data/" + file, "[]", "utf-8");
-      });
       let { resource, name, url: url2, thread, downPath, previewPath, coverPath, videoPath } = arg;
       const headers = getHeaders(resource);
       name = sanitizeVideoName(name);
-      let downLoadPlan = 0, timer = null;
       const designation = getVideoId(name);
       downPath = downPath + `/${designation}`;
       mkdirsSync(downPath);
-      const { videoName, urlPrefix, dataArr } = await processM3u8(url2, headers);
+      const { urlPrefix, dataArr } = await processM3u8(url2, headers);
+      storeData(this.app, {
+        "downloadCount": dataArr.length
+      });
       if (dataArr.length === 0) {
         console.log("无法验证第一个证书");
         return resolve("无法验证第一个证书");
       }
       const countArr = splitArrayIntoEqualChunks(dataArr, thread);
       that.downloadPlanArr = countArr;
-      let getCoverIndex = 0;
       for (let i = 0; i < thread; i++) {
         const separateThread = new worker_threads.Worker(appPath + `\\seprate\\seprateThread${i + 1}.js`);
-        separateThread.on("message", async () => {
-          ++downLoadPlan;
-          console.log(`完成进度：`, downLoadPlan, thread, i);
-          if (downLoadPlan == thread) {
-            if (timer)
-              clearTimeout(timer);
-            const resultText = await merge(name, downPath, videoPath, thread);
-            if (resultText == "合成成功") {
-              setTimeout(async () => {
-                await getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
-                deleteDirFile(downPath);
-                resolve("下载完成");
-              }, 1e3 * 3);
-            }
-          }
-          if (timer)
-            clearTimeout(timer);
-          timer = setTimeout(async () => {
-            if (downLoadPlan >= thread - 3) {
-              await mergeWithTimeout(name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation, event);
-              if (timer)
-                clearTimeout(timer);
-              resolve("下载完成");
-            }
-          }, 3 * 60 * 1e3);
-        });
         separateThread.postMessage({
           urlData: countArr[i],
           index: i + 1,
@@ -1089,123 +1115,19 @@ class WindowManager {
       }
     });
   }
-  // //处理downloadVideoEvent
-  // private onDownloadVideoEvent(event: Electron.IpcMainInvokeEvent, arg: any) {
-  //   const that = this
-  //   return new Promise(async (resolve, reject) => {
-  //     const appPath = __dirname + `../../../electron/`
-  //     const docPath = path.join(this.app.getPath('documents'), 'javPlayer')
-  //     //清除进度条数据
-  //     fs.readdirSync(docPath + '/data').forEach(file => {
-  //       fs.writeFileSync(docPath + '/data/' + file, '[]', 'utf-8')
-  //     })
-  //     //获取解构子进程前端传入的参数
-  //     let { resource, name, url, thread, downPath, previewPath, coverPath, videoPath } = arg
-  //     const headers = getHeaders(resource)  //分辨->获取请求头
-  //     name = name.replace('[无码破解]', '')
-  //     //截取番号出来
-  //     const designation = getIdNumber(name)
-  //     //替换名字非法字符 保留日语和中文字符，并删除其他非字母数字字符
-  //     name = name.replaceAll(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, '')
-  //       .replaceAll(/[\·\・\●\/]/g, '')
-  //       .replaceAll(' ', '')
-  //     //下载计算器 用于计算下载进度
-  //     let downLoadPlan = 0, timer: any = null
-  //     //计算需要下载的文件 url是一个m3u8文件
-  //     const videoName = url.split('/')[url.split('/').length - 1].split('.')[0]
-  //     const urlPrefix = url.split('/').splice(0, url.split('/').length - 1).join('/') + '/'
-  //     const { data: m3u8Data } = await axios(url, {
-  //       method: 'get', headers, httpsAgent: new https.Agent({
-  //         rejectUnauthorized: false  // 禁用 SSL 证书验证
-  //       })
-  //     }) as any
-  //     const dataArr = m3u8Data.split('\n').filter((res: any) => res.indexOf(videoName) === 0)
-  //     const countArr = splitArrayIntoEqualChunks(dataArr, thread)
-  //     that.downloadPlanArr = countArr
-  //     let getCoverIndex = 0 //第几次尝试下载图片的索引
-  //     for (let i = 0; i < thread; i++) {
-  //       const seprateThread = new Worker(appPath + `/seprate/seprateThread${i + 1}.js`);
-  //       seprateThread.on("message", async () => {
-  //         ++downLoadPlan
-  //         //如果当前卡住在15个线程以后，等待5分钟后，
-  //         //如果还是没有下载完毕，就合并，不管有没有下载完毕
-  //         timer && clearTimeout(timer)
-  //         timer = setTimeout(async () => {
-  //           if (downLoadPlan >= thread - 3) {
-  //             const resultext = await merge(name, downPath, videoPath, thread)
-  //             timer && clearTimeout(timer)
-  //             if (resultext === '合成成功') {
-  //               // res.send('合体成功，但是有部分视频没有下载完全')
-  //               getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath)
-  //               // getCoverImg(id, name, cover, getCoverIndex)//获取封面图片
-  //               return resolve('下载完成，但是有部分视频没有下载完全')
-  //             }
-  //           }
-  //         }, 3 * 60 * 1000)
-  //         console.log(downLoadPlan == thread, downLoadPlan, thread, i)
-  //         if (downLoadPlan == thread) {
-  //           const resultext = await merge(name, downPath, videoPath, thread)
-  //           timer && clearTimeout(timer)
-  //           if (resultext === '合成成功') {
-  //             getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath)
-  //             // getCoverImg(id, name, cover, getCoverIndex)//获取封面图片
-  //             // return res.send(resultext)
-  //             // 删除文件v
-  //             for (let i = 0; i < thread; i++) {
-  //               try {
-  //                 fs.unlinkSync(downPath + `/${i}.ts`);
-  //               } catch (e) {
-  //                 // console.log();
-  //               }
-  //             }
-  //             return resolve('下载完成')
-  //           }
-  //         }
-  //       });
-  //       seprateThread.postMessage({ urlData: countArr[i], i, headers, urlPrefix, downPath, docPath });
-  //     }
-  //   })
-  // }
   //注册downloadVideoEvent事件监听
   registerDownloadVideoEvent() {
     require$$3.ipcMain.handle("downloadVideoEvent", this.onDownloadVideoEvent.bind(this));
   }
-  // 处理逻辑getDownloadSpeed
-  /**
-  * 获取下载速度
-  * @param event 事件对象
-  * @param arg 参数对象
-  */
-  onGetDownloadSpeed(event, arg) {
-    const docPath = path$1.join(this.app.getPath("documents"), "javPlayer");
-    let speedValue = 0;
-    fs.readdirSync(docPath + "/data").forEach((file) => {
-      const arr = fs.readFileSync(docPath + "/data/" + file, "utf-8");
-      if (arr === "[]")
-        return;
-      try {
-        speedValue += JSON.parse(arr).length;
-      } catch (e) {
-        console.log("e:", e, arr);
-      }
-    });
-    let sums = 0;
-    this.downloadPlanArr.forEach((element) => {
-      sums += element.length;
-    });
-    return [speedValue, sums || 1e3];
-  }
-  registerGetDownloadSpeed() {
-    require$$3.ipcMain.handle("getDownloadSpeed", this.onGetDownloadSpeed.bind(this));
-  }
-  //处理逻辑getDownloadSpeed
+  //获取下载目录内容
   onGetDownloadListContent(event, arg) {
     let arr = [];
     if (arg) {
       arr = fs.readdirSync(arg).map((file) => {
         return {
-          state: fs.statSync(arg + "/" + file),
-          name: file
+          state: getFolderSize(arg + "/" + file),
+          name: file,
+          downloadTime: elementPlus.dayjs(fs.statSync(arg + "/" + file).birthtimeMs).format("X")
         };
       });
     }
@@ -1214,12 +1136,21 @@ class WindowManager {
   registerGetDownloadListContent() {
     require$$3.ipcMain.handle("getDownloadListContent", this.onGetDownloadListContent.bind(this));
   }
-  //处理逻辑deleteDirFile
+  //清空文件夹内容 不删除父文件夹
   onDeleteDirFile(event, arg) {
     if (arg) {
-      fs.readdirSync(arg).forEach(async (file) => {
-        await fs.unlinkSync(arg + "/" + file);
-      });
+      try {
+        fs.readdirSync(arg).forEach((file) => {
+          if (fs.statSync(arg + "/" + file).isDirectory()) {
+            fs.rmdirSync(arg + "/" + file, { recursive: true });
+          } else {
+            fs.unlinkSync(arg + "/" + file);
+          }
+        });
+        return "删除成功";
+      } catch (e) {
+        return "删除失败";
+      }
     }
   }
   registerDeleteDirFile() {
@@ -1227,7 +1158,6 @@ class WindowManager {
   }
   //处理逻辑deleteDirFile
   onCreateDir(event, arg) {
-    console.log(`lzy  arg:`, arg);
     if (arg) {
       fs.mkdirSync(arg);
     }
@@ -1268,17 +1198,22 @@ class WindowManager {
   //合并视频的逻辑
   async onMergeVideo(event, arg) {
     let getCoverIndex = 0;
-    const { previewPath, coverPath } = this.pathJson;
-    let { name, downPath, videoPath, thread } = arg;
-    name = name.replace("[无码破解]", "");
+    const { previewPath, coverPath, downloadPath, videoPath } = this.pathJson;
+    let { name } = arg;
+    name = sanitizeVideoName(name);
     const designation = getVideoId(name);
     if (!designation)
       return "番号不正确";
-    name = name.replace(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, "").replaceAll(/[\·\・\●\/]/g, "").replaceAll(" ", "");
-    const resultext = await merge(name, downPath, videoPath, thread);
-    if (resultext === "合成成功") {
-      getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
-      return "合成成功";
+    const existArr = fs.existsSync(videoPath + "/" + name + ".mp4");
+    if (existArr)
+      return "视频已经存在，无需合并";
+    const resulted = await merge(name, downloadPath + `/${designation}`, videoPath);
+    if (resulted === "合成成功") {
+      await getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
+      await fs.rmSync(downloadPath + `/${designation}`, { recursive: true });
+      return name;
+    } else {
+      return resulted;
     }
   }
   registeronMergeVideo() {
@@ -1297,21 +1232,20 @@ class WindowManager {
     const storePath = path$1.join(this.app.getPath("documents"), "javPlayer");
     const storeFilePath = path$1.join(storePath, "storeLog.json");
     const storeFile = fs.readFileSync(storeFilePath, "utf-8");
-    const storeData = JSON.parse(storeFile);
-    let starArr = storeData.starArr;
+    const storeData2 = JSON.parse(storeFile);
+    let starArr = storeData2.starArr;
     if (!starArr) {
       starArr = [arg];
     } else {
       if (starArr.indexOf(arg) != -1) {
         starArr.splice(starArr.indexOf(arg), 1);
-        return fs.writeFileSync(storeFilePath, JSON.stringify(Object.assign(storeData, {
+        return fs.writeFileSync(storeFilePath, JSON.stringify(Object.assign(storeData2, {
           starArr
         })), "utf-8");
       }
       starArr.push(arg);
     }
-    console.log(`lzy  starArr:`, starArr);
-    fs.writeFileSync(storeFilePath, JSON.stringify(Object.assign(storeData, {
+    fs.writeFileSync(storeFilePath, JSON.stringify(Object.assign(storeData2, {
       starArr
     })), "utf-8");
   }
@@ -1342,6 +1276,24 @@ class WindowManager {
   }
   registerGetAllDirPath() {
     require$$3.ipcMain.handle("onGetAllDirPath", this.onGetAllDirPath.bind(this));
+  }
+  //当添加页面初始进来时，发送下载的进度和总数回去
+  onGetDownloadProgress(event, arg) {
+    const designation = getVideoId(arg);
+    const { downloadPath } = this.pathJson;
+    const storeData2 = getStoreData(this.app);
+    try {
+      const avList = fs.readdirSync(downloadPath + "/" + designation);
+      storeData2.downLoadAfter = avList.length;
+    } catch (e) {
+      if (checkFileFoundError.checkFileNotFoundError(e)) {
+        storeData2.downLoadAfter = 0;
+      }
+    }
+    return storeData2;
+  }
+  registerGetDownloadProgress() {
+    require$$3.ipcMain.handle("onGetDownloadProgress", this.onGetDownloadProgress.bind(this));
   }
 }
 function getHeaders(resource) {
@@ -1445,38 +1397,6 @@ async function processM3u8(url2, headers) {
   } catch (e) {
     console.error("处理M3U8文件出错:", e.message);
     return { videoName, urlPrefix, dataArr: [] };
-  }
-}
-async function mergeWithTimeout(...arg) {
-  const [name, downPath, videoPath, thread, getCoverIndex, previewPath, coverPath, designation, event] = arg;
-  const resultText = await merge(name, downPath, videoPath, thread);
-  console.log("有部分视频没有下载完全");
-  if (resultText == "合成成功") {
-    await getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
-    return "下载完成，但是有部分视频没有下载完全";
-  }
-}
-function deleteDirFile(path2, retries = 3, delay = 3e3) {
-  if (path2) {
-    fs.readdirSync(path2).forEach((file) => {
-      try {
-        if (!fs.existsSync(path2 + "/" + file))
-          return;
-        fs.unlink(path2 + "/" + file, (err) => {
-          if (!err)
-            return;
-          if (err.code === "EBUSY" && retries > 0) {
-            if (file.indexOf(".ts") == -1) {
-              console.log(`文件正被占用，${4 - retries}次重试`);
-            }
-            setTimeout(() => {
-              deleteDirFile(path2, retries - 1, delay);
-            }, delay);
-          }
-        });
-      } catch (e) {
-      }
-    });
   }
 }
 process.env.DIST_ELECTRON = path.join(__dirname, "..");

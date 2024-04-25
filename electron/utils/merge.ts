@@ -1,32 +1,38 @@
 import fs from "fs";
 import path from "path";
-import { exec } from "child_process";
-// merge('IPX-005リピーター続出！噂の本番できちゃうおっパブ店 Fカップ巨乳嬢を味わい尽くせ桃乃木かな')
-export async function merge(name: any, downPath: string, videoPath: string, thread: number, event: any) {
-  let filenames
-  for (let i = 1; i <= thread; i++) {
-    const has = fs.existsSync(path.join(downPath, `/${i}.ts`));
-    if (has) {
-      if (i === 1) {
-        filenames = "1.ts"
-      } else {
-        filenames += `|${i}.ts`
-      }
-    }
-  }
-  if (filenames === undefined) return
-  const max = {
-    // 一次性最大缓存 不限制
-    maxBuffer: 1024 * 1024 * 1024,
-    cwd: downPath
-  }
+import { execFile } from "child_process";
+const ffmpeg = 'ffmpeg';  // 替换你的ffmpeg程序的完整路径，如果ffmpeg在环境变量中，直接写'ffmpeg'即可。
 
-  const cmd = `cd ${downPath} && ffmpeg -i "concat:${filenames}" -c copy -bsf:a aac_adtstoasc -movflags +faststart ${videoPath}/${name}.mp4`
-  try {
-    await exec(cmd, max);
-    return "合成成功"
-  } catch (e) {
-    console.log(e);
-    return "合成失败"
-  }
+// merge('IPX-005リピーター続出！噂の本番できちゃうおっパブ店 Fカップ巨乳嬢を味わい尽くせ桃乃木かな')
+export function merge(name: any, downPath: string, videoPath: string) {
+  // 获取ts文件并生成filenames数组
+  const filenames = fs.readdirSync(downPath)
+    .filter(file => fs.existsSync(path.join(downPath, file)))
+    .map(file => file);
+
+  if (!filenames.length) return "没有找到ts文件";
+
+  const options = [
+    '-i',
+    `concat:${filenames.join('|')}`,
+    '-c',
+    'copy',
+    '-bsf:a',
+    'aac_adtstoasc',
+    '-movflags',
+    '+faststart',
+    `${videoPath}/${name}.mp4`
+  ];
+
+  return new Promise((resolve, reject) => {
+    execFile(ffmpeg, options, { cwd: downPath, maxBuffer: 1024 * 1024 * 1024 }, (error, stdout, stderr) => {
+      if (error) {
+        console.error(`执行错误: ${error}`);
+        reject('合成失败');
+      } else {
+        resolve('合成成功');
+      }
+    });
+  });
+
 }

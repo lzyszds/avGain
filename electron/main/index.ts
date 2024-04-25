@@ -3,7 +3,7 @@ import { release } from 'node:os' // 引入node:os模块中的release函数
 import { join } from 'node:path' // 引入node:path模块中的join函数
 import remote from '@electron/remote/main' // 引入@electron/remote/main模块
 import { WindowManager } from './handle' // 引入./handle模块中的WindowManager类
-import { mkdirsSync, createSystemStore } from '../utils/utils'; // 引入../utils/utils模块中的mkdirsSync和createSystemStore函数
+import { createSystemStore } from '../utils/utils'; // 引入../utils/utils模块中的mkdirsSync和createSystemStore函数
 
 //构建的目录结构
 // ├─┬ dist-electron

@@ -62,6 +62,49 @@ export const createSystemStore = (app) => {
   return systemStore
 }
 
+//将数据存储到系统存储文件中
+export const storeData = (app: any, data: object) => {
+  const systemStore = join(app.getPath('documents'), 'javPlayer')
+  const config = join(systemStore, 'storeLog.json')
+  console.log(`lzy  config:`, config)
+  //在原来的数据基础上进行合并
+  let dataStr = JSON.stringify(data)
+  if (fs.existsSync(config)) {
+    let oldData = fs.readFileSync(config, 'utf-8')
+    let oldDataObj = JSON.parse(oldData)
+    dataStr = JSON.stringify({ ...oldDataObj, ...data })
+  }
+  fs.writeFileSync(config, dataStr, 'utf-8')
+}
+
+//获取系统存储数据
+export const getStoreData = (app: any) => {
+  const systemStore = join(app.getPath('documents'), 'javPlayer')
+  const config = join(systemStore, 'storeLog.json')
+  if (fs.existsSync(config)) {
+    let data = fs.readFileSync(config, 'utf-8')
+    return JSON.parse(data)
+  }
+  return {}
+}
+
+//计算文件夹的大小
+export function getFolderSize(dirname) {
+  let size = 0;
+  const files = fs.readdirSync(dirname);
+  files.forEach(file => {
+    const filePath = path.join(dirname, file);
+    const stat = fs.statSync(filePath);
+    if (stat.isFile()) {
+      size += stat.size;
+    } else if (stat.isDirectory()) {
+      size += getFolderSize(filePath);
+    }
+  });
+  return size;
+}
+
+
 
 export const checkFileFoundError = {
   /**
@@ -85,6 +128,7 @@ export const checkFileFoundError = {
   }
 }
 
+//格式化文件大小
 export function formatFileSize(fileSize: any) {
 
   const units = [
