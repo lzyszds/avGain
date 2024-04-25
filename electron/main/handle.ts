@@ -213,7 +213,7 @@ export class WindowManager {
       if (file.indexOf('.png') == -1) {
         const name = file.split('.jpg')[0]
         //如果视频存在封面，将封面从数组中删除 以备后续下载
-        if (existArr.indexOf(`${name}.mp4`) != -1) {
+        if (existArr.includes(`${name}.mp4`)) {
           existArr.splice(existArr.indexOf(`${name}.mp4`), 1)
         }
 
@@ -395,7 +395,8 @@ export class WindowManager {
   }
 
   private onHandleDeleteFile(event: Electron.IpcMainInvokeEvent, arg: any) {
-    const name = arg
+    const name = arg.split('/')[1].split('.mp4')[0]
+
     const { videoPath, previewPath, coverPath } = this.pathJson
     fs.access(`${videoPath}/${name}.mp4`, (err) => {
       if (err) return console.log('文件不存在')

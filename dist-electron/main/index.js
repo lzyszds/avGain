@@ -21,7 +21,7 @@ function getDefaultExportFromCjs(x) {
   return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
 }
 var main$1 = {};
-var server = {};
+var server = { exports: {} };
 var objectsRegistry = {};
 Object.defineProperty(objectsRegistry, "__esModule", { value: true });
 const getOwnerKey = (webContents, contextId) => {
@@ -221,7 +221,8 @@ const getElectronBinding = (name) => {
   }
 };
 getElectronBinding$1.getElectronBinding = getElectronBinding;
-(function(exports) {
+server.exports;
+(function(module2, exports) {
   var __importDefault = commonjsGlobal && commonjsGlobal.__importDefault || function(mod) {
     return mod && mod.__esModule ? mod : { "default": mod };
   };
@@ -558,7 +559,15 @@ Remote event names: ${remoteEvents.join(", ")}`;
         if (customEvent.defaultPrevented) {
           throw new Error(`Blocked remote.require('${moduleName}')`);
         } else {
-          customEvent.returnValue = process.mainModule.require(moduleName);
+          if (process.mainModule) {
+            customEvent.returnValue = process.mainModule.require(moduleName);
+          } else {
+            let mainModule = module2;
+            while (mainModule.parent) {
+              mainModule = mainModule.parent;
+            }
+            customEvent.returnValue = mainModule.require(moduleName);
+          }
         }
       }
       return valueToMeta(event.sender, contextId, customEvent.returnValue);
@@ -683,11 +692,12 @@ Remote event names: ${remoteEvents.join(", ")}`;
     });
   }
   exports.initialize = initialize;
-})(server);
+})(server, server.exports);
+var serverExports = server.exports;
 (function(exports) {
   Object.defineProperty(exports, "__esModule", { value: true });
   exports.enable = exports.isInitialized = exports.initialize = void 0;
-  var server_1 = server;
+  var server_1 = serverExports;
   Object.defineProperty(exports, "initialize", { enumerable: true, get: function() {
     return server_1.initialize;
   } });
@@ -1057,7 +1067,7 @@ class WindowManager {
         return null;
       if (file.indexOf(".png") == -1) {
         const name = file.split(".jpg")[0];
-        if (existArr.indexOf(`${name}.mp4`) != -1) {
+        if (existArr.includes(`${name}.mp4`)) {
           existArr.splice(existArr.indexOf(`${name}.mp4`), 1);
         }
         let stat = null, datails = null;
@@ -1199,7 +1209,7 @@ class WindowManager {
     require$$3.ipcMain.handle("onCreateDir", this.onCreateDir.bind(this));
   }
   onHandleDeleteFile(event, arg) {
-    const name = arg;
+    const name = arg.split("/")[1].split(".mp4")[0];
     const { videoPath, previewPath, coverPath } = this.pathJson;
     fs.access(`${videoPath}/${name}.mp4`, (err) => {
       if (err)

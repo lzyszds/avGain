@@ -27,3 +27,4 @@ package-lock.json
 *.sln
 *.sw?
 node_modules
+yarn.lock
