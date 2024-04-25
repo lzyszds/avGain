@@ -34,6 +34,7 @@ const storeData = ref(await el.onGetDownloadProgress(sizeForm.value.name));
 
 const alternateArr = useStorage("alternateArr", [{ name: "", url: "" }]);
 const percentage = computed(() => {
+  if (storeData.value.downLoadAfter === 0) return 0;
   return Number(
     (
       (storeData.value.downLoadAfter / storeData.value.downloadCount) *
@@ -47,12 +48,23 @@ const speedDownload = ref<string>();
 
 const activeNames = ref(["1"]);
 
+//判断是否正在下载
+const isStartDown = ref(false);
+
 //历史记录当前页数
 const newPage = ref(1);
 
 let timer,
   downLoadAfterCopy: number[] = [];
 async function onSubmit() {
+  isStartDown.value = !isStartDown.value;
+  if (!isStartDown.value) {
+    ElNotification({
+      title: "下载已暂停",
+      message: sizeForm.value.name,
+      type: "warning",
+    });
+  }
   timer && clearInterval(timer);
   const { name, url } = sizeForm.value;
   if (!name || !url) return;
@@ -93,9 +105,14 @@ async function onSubmit() {
       getDownloadListContent();
       updateSpeedDownload();
     }
-    console.log(downLoadAfterCopy.length);
     // 判断是否下载完成
+    console.log(`lzy  after == count:`, after == count);
     if (after == count || downLoadAfterCopy.length === 0) {
+      ElNotification({
+        title: "下载提示：",
+        message: "下载完成正在合并视频",
+        type: "success",
+      });
       timer && clearInterval(timer);
       //视频下载完成后，将视频进行合并
       el.onMergeVideo({ name });
@@ -332,7 +349,9 @@ function handleHistory(currentPage: number = 1): any {
             {{ storeData.downLoadAfter }}/{{ storeData.downloadCount }}
           </span>
           <button class="button download" @click="onSubmit" type="button">
-            <span class="button__text">开始下载</span>
+            <span class="button__text"
+              >{{ isStartDown ? "暂停" : "开始" }}下载</span
+            >
             <span class="button__icon">
               <svg
                 class="svg"

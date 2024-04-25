@@ -3,11 +3,15 @@ import type { App } from 'electron';
 import fs from 'fs';
 import path from 'path';
 import https from 'https'
-import { mkdirsSync, createSystemStore, formatFileSize, quickSortByTimestamp, storeData, getStoreData, checkFileFoundError, getFolderSize } from '../utils/utils'; // 假设您有一个名为 'utils' 的模块用于创建目录
+import {
+  mkdirsSync,
+  createSystemStore, formatFileSize, quickSortByTimestamp, storeData, getStoreData,
+  checkFileFoundError, getFolderSize, downloadM3U8
+} from '../utils/utils'; // 假设您有一个名为 'utils' 的模块用于创建目录
 import { dayjs } from 'element-plus'
-import axios from 'axios'
 import { Worker } from "worker_threads";
 import { merge } from '../utils/merge'
+import m3u8Parser from 'm3u8-parser'
 
 /**
  * @export
@@ -16,12 +20,14 @@ import { merge } from '../utils/merge'
 export class WindowManager {
   private win: BrowserWindow;
   private app: App;
+  private mainWindow: BrowserWindow
   private pathJson: {
     coverPath: string,
     previewPath: string,
     videoPath: string,
     downloadPath: string
   };
+  private workerArr: Worker[];
   private downloadPlanArr: any;
 
   /**
@@ -34,6 +40,8 @@ export class WindowManager {
   constructor(win: BrowserWindow, app: App, mainWindow: BrowserWindow) {
     this.win = win;
     this.app = app;
+    this.mainWindow = mainWindow
+    this.workerArr = []
     this.pathJson = {
       coverPath: '',
       previewPath: '',
@@ -48,6 +56,7 @@ export class WindowManager {
     this.registerHandleStoreData()//存储数据进入系统存储文件夹
     this.registerGetListData()//获取视频列表数据
     this.registerDownloadVideoEvent()//下载视频
+    this.registerPauseDownload //暂停下载
     this.registerGetDownloadListContent()//获取下载目录内容
     this.registerDeleteDirFile()//清除文件夹内的内容
     this.registerCreateDir()//创建文件夹
@@ -236,7 +245,6 @@ export class WindowManager {
       }
     }).filter((item) => item !== null);
     //将没有封面的视频封面进行下载
-    console.log(existArr);
     existArr.forEach((item: any) => {
       const videoId = getVideoId(item)
       if (videoId) {
@@ -276,7 +284,7 @@ export class WindowManager {
 
 
       // 从M3U8 URL计算出需要下载的视频文件信息。
-      const { urlPrefix, dataArr } = await processM3u8(url, headers);
+      const { urlPrefix, dataArr } = await processM3u8(url, headers, docPath);
 
       //将视频数量存入store中
       storeData(this.app, {
@@ -307,12 +315,27 @@ export class WindowManager {
           downPath: downPath,
           docPath: docPath
         });
+        that.workerArr.push(separateThread);
       }
     });
   }
   //注册downloadVideoEvent事件监听
   private registerDownloadVideoEvent(): void {
     ipcMain.handle('downloadVideoEvent', this.onDownloadVideoEvent.bind(this));
+  }
+
+
+  //暂停下载
+  private onPauseDownload(event: Electron.IpcMainInvokeEvent, arg: any) {
+    //arg传入下载路径
+    if (arg) {
+      this.workerArr.forEach((worker) => {
+        worker.terminate()
+      })
+    }
+  }
+  private registerPauseDownload(): void {
+    ipcMain.handle('pauseDownload', this.onPauseDownload.bind(this));
   }
 
   //获取下载目录内容
@@ -592,7 +615,6 @@ function getPreviewVideo(id: string, name: string, getCoverIndex: number, previe
     if (getCoverIndex >= 5 || getHoverCoverIndex >= 5) return
     /* 获取图片，图片来自missav.com中，因为这个网站没做拦截 */
     const url = host + `${id}/cover.jpg?class=normal`
-    console.log(`lzy  url:`, url)
     https.get(url, (response) => {
       const localPath = coverPath + '/' + name + '.jpg'
       const fileStream = fs.createWriteStream(localPath);
@@ -643,20 +665,19 @@ function sanitizeVideoName(name) {
 }
 
 // 把处理M3U8的逻辑抽离为一个单独的函数。
-async function processM3u8(url, headers) {
+async function processM3u8(url, headers, docPath) {
   let videoName = url.split('/')[url.split('/').length - 1].split('.')[0];
   let urlPrefix = url.split('/').splice(0, url.split('/').length - 1).join('/') + '/';
   try {
-    const { data: m3u8Data } = await axios(url, {
-      method: 'get', headers, httpsAgent: new https.Agent({
-        rejectUnauthorized: false  // 禁用SSL证书验证。
-      })
-    });
-    let dataArr = m3u8Data.split('\n').filter((res) => res.indexOf(videoName) === 0);
-    if (dataArr.length === 0) {
-      dataArr = m3u8Data.split('\n').filter((res) => res.indexOf('https') === 0);
-      urlPrefix = '';
-    }
+    // const { default: got } = await import('got');
+
+    const m3u8Data = await downloadM3U8(url, docPath);
+    const myParser = new m3u8Parser.Parser();
+    myParser.push(m3u8Data);
+    myParser.end();
+    // 要获取数据，
+    let dataArr = myParser.manifest.segments
+
     return { videoName, urlPrefix, dataArr };
   } catch (e: any) {
     console.error('处理M3U8文件出错:', e.message);
@@ -690,3 +711,8 @@ function deleteDirFile(path: string, retries = 3, delay = 3000) {
     })
   }
 }
+
+
+
+
+

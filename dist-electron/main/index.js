@@ -12,11 +12,10 @@ const require$$0 = require("events");
 const fs = require("fs");
 const path$1 = require("path");
 const https = require("https");
-const os = require("os");
 const elementPlus = require("element-plus");
-const axios = require("axios");
 const worker_threads = require("worker_threads");
-const child_process = require("child_process");
+const child_process$1 = require("child_process");
+const m3u8Parser = require("m3u8-parser");
 var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
 function getDefaultExportFromCjs(x) {
   return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
@@ -719,22 +718,6 @@ const createSystemStore = (app) => {
   mkdirsSync(systemStore);
   if (!fs.existsSync(path.join(systemStore, "data"))) {
     mkdirsSync(path.join(systemStore, "data"));
-    for (let i = 1; i <= 20; i++) {
-      const documentsPath = path.join(os.homedir(), "Documents");
-      const docPath = path.join(documentsPath, "javPlayer");
-      try {
-        fs.writeFile(docPath + `/data/data${i}.json`, `[]`, (err) => {
-          if (err) {
-            console.log(err);
-            throw err;
-          }
-          console.log(`data${i}.json创建成功`);
-        });
-      } catch (e) {
-        fs.rmdirSync(path.join(systemStore, "data"), { recursive: true });
-        createSystemStore(app);
-      }
-    }
   }
   if (!fs.existsSync(path.join(systemStore, "storeLog.json"))) {
     fs.writeFileSync(path.join(systemStore, "storeLog.json"), `{
@@ -750,7 +733,6 @@ const createSystemStore = (app) => {
 const storeData = (app, data) => {
   const systemStore = path.join(app.getPath("documents"), "javPlayer");
   const config = path.join(systemStore, "storeLog.json");
-  console.log(`lzy  config:`, config);
   let dataStr = JSON.stringify(data);
   if (fs.existsSync(config)) {
     let oldData = fs.readFileSync(config, "utf-8");
@@ -842,6 +824,39 @@ function quickSortByTimestamp(arr, key, isIncremental = true) {
     return [...quickSortByTimestamp(greater, key, isIncremental), ...equal, ...quickSortByTimestamp(less, key, isIncremental)];
   }
 }
+const child_process = require("child_process");
+async function downloadM3U8(url2, outputPath) {
+  const dataDir = fs.readdirSync(outputPath + "\\data");
+  dataDir.forEach(async (item) => {
+    if (!url2.includes(item)) {
+      const pathToIDM = "K:\\IDM 6.39.8 mod\\IDM 6.39.8 mod\\IDMan.exe";
+      await child_process.spawn(pathToIDM, ["/d", url2, "/n", "/p", outputPath + "\\data"]);
+    }
+  });
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      fs.readdir(outputPath + "\\data", (err, files) => {
+        if (err) {
+          reject(err);
+        } else {
+          const fileInfos = [];
+          files.forEach((file, index) => {
+            const fileInfo2 = fs.statSync(outputPath + "\\data\\" + file);
+            if (fileInfo2.isFile()) {
+              fileInfos.push({
+                name: file,
+                time: fileInfo2.birthtimeMs
+              });
+            }
+          });
+          const fileInfo = quickSortByTimestamp(fileInfos, "time", false)[0];
+          const res = fs.readFileSync(outputPath + "\\data\\" + fileInfo.name, "utf-8");
+          resolve(res);
+        }
+      });
+    }, 5e3);
+  });
+}
 const ffmpeg = "ffmpeg";
 function merge(name, downPath, videoPath) {
   const filenames = fs.readdirSync(downPath).filter((file) => fs.existsSync(path$1.join(downPath, file))).map((file) => file);
@@ -859,7 +874,7 @@ function merge(name, downPath, videoPath) {
     `${videoPath}/${name}.mp4`
   ];
   return new Promise((resolve, reject) => {
-    child_process.execFile(ffmpeg, options, { cwd: downPath, maxBuffer: 1024 * 1024 * 1024 }, (error, stdout, stderr) => {
+    child_process$1.execFile(ffmpeg, options, { cwd: downPath, maxBuffer: 1024 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) {
         console.error(`执行错误: ${error}`);
         reject("合成失败");
@@ -880,10 +895,14 @@ class WindowManager {
   constructor(win2, app, mainWindow) {
     __publicField(this, "win");
     __publicField(this, "app");
+    __publicField(this, "mainWindow");
     __publicField(this, "pathJson");
+    __publicField(this, "workerArr");
     __publicField(this, "downloadPlanArr");
     this.win = win2;
     this.app = app;
+    this.mainWindow = mainWindow;
+    this.workerArr = [];
     this.pathJson = {
       coverPath: "",
       previewPath: "",
@@ -896,6 +915,7 @@ class WindowManager {
     this.registerHandleStoreData();
     this.registerGetListData();
     this.registerDownloadVideoEvent();
+    this.registerPauseDownload;
     this.registerGetDownloadListContent();
     this.registerDeleteDirFile();
     this.registerCreateDir();
@@ -1065,7 +1085,6 @@ class WindowManager {
         return null;
       }
     }).filter((item) => item !== null);
-    console.log(existArr);
     existArr.forEach((item) => {
       const videoId = getVideoId(item);
       if (videoId) {
@@ -1092,7 +1111,7 @@ class WindowManager {
       const designation = getVideoId(name);
       downPath = downPath + `/${designation}`;
       mkdirsSync(downPath);
-      const { urlPrefix, dataArr } = await processM3u8(url2, headers);
+      const { urlPrefix, dataArr } = await processM3u8(url2, headers, docPath);
       storeData(this.app, {
         "downloadCount": dataArr.length
       });
@@ -1112,12 +1131,24 @@ class WindowManager {
           downPath,
           docPath
         });
+        that.workerArr.push(separateThread);
       }
     });
   }
   //注册downloadVideoEvent事件监听
   registerDownloadVideoEvent() {
     require$$3.ipcMain.handle("downloadVideoEvent", this.onDownloadVideoEvent.bind(this));
+  }
+  //暂停下载
+  onPauseDownload(event, arg) {
+    if (arg) {
+      this.workerArr.forEach((worker) => {
+        worker.terminate();
+      });
+    }
+  }
+  registerPauseDownload() {
+    require$$3.ipcMain.handle("pauseDownload", this.onPauseDownload.bind(this));
   }
   //获取下载目录内容
   onGetDownloadListContent(event, arg) {
@@ -1341,7 +1372,6 @@ function getPreviewVideo(id, name, getCoverIndex, previewPath, coverPath) {
     if (getCoverIndex >= 5 || getHoverCoverIndex >= 5)
       return;
     const url2 = host + `${id}/cover.jpg?class=normal`;
-    console.log(`lzy  url:`, url2);
     https.get(url2, (response) => {
       const localPath = coverPath + "/" + name + ".jpg";
       const fileStream = fs.createWriteStream(localPath);
@@ -1376,23 +1406,15 @@ function getPreviewVideo(id, name, getCoverIndex, previewPath, coverPath) {
 function sanitizeVideoName(name) {
   return name.replace("[无码破解]", "").replaceAll(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, "").replaceAll(/[\·\・\●\/]/g, "").replaceAll(" ", "");
 }
-async function processM3u8(url2, headers) {
+async function processM3u8(url2, headers, docPath) {
   let videoName = url2.split("/")[url2.split("/").length - 1].split(".")[0];
   let urlPrefix = url2.split("/").splice(0, url2.split("/").length - 1).join("/") + "/";
   try {
-    const { data: m3u8Data } = await axios(url2, {
-      method: "get",
-      headers,
-      httpsAgent: new https.Agent({
-        rejectUnauthorized: false
-        // 禁用SSL证书验证。
-      })
-    });
-    let dataArr = m3u8Data.split("\n").filter((res) => res.indexOf(videoName) === 0);
-    if (dataArr.length === 0) {
-      dataArr = m3u8Data.split("\n").filter((res) => res.indexOf("https") === 0);
-      urlPrefix = "";
-    }
+    const m3u8Data = await downloadM3U8(url2, docPath);
+    const myParser = new m3u8Parser.Parser();
+    myParser.push(m3u8Data);
+    myParser.end();
+    let dataArr = myParser.manifest.segments;
     return { videoName, urlPrefix, dataArr };
   } catch (e) {
     console.error("处理M3U8文件出错:", e.message);

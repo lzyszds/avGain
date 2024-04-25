@@ -13,6 +13,8 @@ const validChannels = [
   'onGetListData',
   //下载视频
   'downloadVideoEvent',
+  //暂停下载
+  'pauseDownload',
   //获取下载目录内容
   'getDownloadListContent',
   //清除文件夹内的内容

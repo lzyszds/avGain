@@ -1,3 +1,4 @@
+import { shell } from 'electron';
 import fs from 'fs'
 import path, { join } from 'node:path'
 import os from 'os'
@@ -29,25 +30,7 @@ export const createSystemStore = (app) => {
   //创建data下载进度文件夹
   if (!fs.existsSync(join(systemStore, 'data'))) {
     mkdirsSync(join(systemStore, 'data'))
-    for (let i = 1; i <= 20; i++) {
-      const documentsPath = path.join(os.homedir(), 'Documents');
-      const docPath = path.join(documentsPath, 'javPlayer')
-      try {
-        fs.writeFile(docPath + `/data/data${i}.json`, `[]`, (err) => {
-          if (err) {
-            console.log(err);
-            throw err;
-          }
-          console.log(`data${i}.json创建成功`);
-        })
-      } catch (e) {
-        //将文件夹data删除后重新创建
-        fs.rmdirSync(join(systemStore, 'data'), { recursive: true });
-        createSystemStore(app)
-      }
-    }
   }
-
 
   //创建系统存储文件夹 如果不存在 则创建 并写入文件
   if (!fs.existsSync(join(systemStore, 'storeLog.json'))) {
@@ -66,7 +49,6 @@ export const createSystemStore = (app) => {
 export const storeData = (app: any, data: object) => {
   const systemStore = join(app.getPath('documents'), 'javPlayer')
   const config = join(systemStore, 'storeLog.json')
-  console.log(`lzy  config:`, config)
   //在原来的数据基础上进行合并
   let dataStr = JSON.stringify(data)
   if (fs.existsSync(config)) {
@@ -182,3 +164,47 @@ export function quickSortByTimestamp(arr: any, key: string, isIncremental: boole
     return [...quickSortByTimestamp(greater, key, isIncremental), ...equal, ...quickSortByTimestamp(less, key, isIncremental)];
   }
 }
+
+
+const child_process = require('child_process');
+
+export async function downloadM3U8(url, outputPath): Promise<string> {
+
+  const dataDir = fs.readdirSync(outputPath + "\\data")
+  dataDir.forEach(async item => {
+    if (!url.includes(item)) {
+      const pathToIDM = 'K:\\IDM 6.39.8 mod\\IDM 6.39.8 mod\\IDMan.exe' // IDM安装程序的实际路径
+      await child_process.spawn(pathToIDM, ['/d', url, '/n', '/p', outputPath + "\\data"])
+    }
+  })
+
+  return new Promise((resolve, reject) => {
+    setTimeout(() => {
+      fs.readdir(outputPath + "\\data", (err, files) => {
+        if (err) {
+          reject(err);
+        } else {
+          const fileInfos: any[] = []
+          //根据时间获取最新的文件内容
+          files.forEach((file, index) => {
+            const fileInfo = fs.statSync(outputPath + "\\data\\" + file)
+            if (fileInfo.isFile()) {
+              fileInfos.push({
+                name: file,
+                time: fileInfo.birthtimeMs
+              })
+            }
+          });
+
+          //返回时间最大的文件
+          const fileInfo = quickSortByTimestamp(fileInfos, 'time', false)[0]
+          const res = fs.readFileSync(outputPath + "\\data\\" + fileInfo.name, "utf-8")
+          resolve(res)
+        }
+      });
+    }, 5000);
+  });
+
+
+}
+

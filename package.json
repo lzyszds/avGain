@@ -1,7 +1,7 @@
 {
   "name": "AvGain",
   "private": true,
-  "version": "1.1.1",
+  "version": "1.2.1",
   "main": "dist-electron/main/index.js",
   "description": "av爬取软件",
   "author": "lzyszds",
@@ -16,9 +16,11 @@
     "create": "node createSeprate.js",
     "viteBuild": "vite build",
     "build": "tsc && vite build && electron-builder && tsc --build --clean",
-    "electronBuild": "electron-builder"
+    "electronBuild": "electron-builder --win"
   },
   "build": {
+    "productName": "AvGain",
+    "copyright": "Copyright © 2024 lzyszds ",
     "directories": {
       "output": "build"
     },
@@ -59,7 +61,9 @@
     "axios": "^1.5.0",
     "element-plus": "^2.3.8",
     "fluent-ffmpeg": "^2.1.2",
+    "got": "^10.7.0",
     "https": "^1.0.0",
+    "m3u8-parser": "^7.1.0",
     "p5": "^1.7.0",
     "plyr": "^3.7.8",
     "postcss": "^8.4.27",
