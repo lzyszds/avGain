@@ -5,12 +5,12 @@ import Add from "@/views/Add.vue";
 
 const routes = [
   {
-    path: "/home",
+    path: "/",
     name: "首页",
     component: Home, //注意，没有重定向就会出现两个一模一样的home页面
   },
   {
-    path: "/",
+    path: "/add",
     name: "添加",
     component: Add,
   }
