@@ -59,7 +59,7 @@ let timer,
 async function onSubmit() {
   isStartDown.value = !isStartDown.value;
   if (!isStartDown.value) {
-    ElNotification({
+    return ElNotification({
       title: "下载已暂停",
       message: sizeForm.value.name,
       type: "warning",
@@ -209,7 +209,7 @@ let oldSize = 0;
 const updateSpeedDownload = () => {
   let totalSize = 0;
   fileDirlist.value.forEach((res) => {
-    totalSize += res.state.size;
+    totalSize += res.state;
   });
   // 如果新的总大小与旧的总大小相同，则不更新速度下载值
   if (totalSize === oldSize) {

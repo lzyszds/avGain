@@ -171,12 +171,15 @@ const child_process = require('child_process');
 export async function downloadM3U8(url, outputPath): Promise<string> {
 
   const dataDir = fs.readdirSync(outputPath + "\\data")
+  const isExistArr: boolean[] = []
   dataDir.forEach(async item => {
-    if (!url.includes(item)) {
-      const pathToIDM = 'K:\\IDM 6.39.8 mod\\IDM 6.39.8 mod\\IDMan.exe' // IDM安装程序的实际路径
-      await child_process.spawn(pathToIDM, ['/d', url, '/n', '/p', outputPath + "\\data"])
-    }
+    isExistArr.push(url.includes(item))
   })
+
+  if (!isExistArr.includes(true)) {
+    const pathToIDM = 'K:\\IDM 6.39.8 mod\\IDM 6.39.8 mod\\IDMan.exe' // IDM安装程序的实际路径
+    await child_process.spawn(pathToIDM, ['/d', url, '/n', '/p', outputPath + "\\data"])
+  }
 
   return new Promise((resolve, reject) => {
     setTimeout(() => {

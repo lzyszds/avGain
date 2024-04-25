@@ -827,12 +827,14 @@ function quickSortByTimestamp(arr, key, isIncremental = true) {
 const child_process = require("child_process");
 async function downloadM3U8(url2, outputPath) {
   const dataDir = fs.readdirSync(outputPath + "\\data");
+  const isExistArr = [];
   dataDir.forEach(async (item) => {
-    if (!url2.includes(item)) {
-      const pathToIDM = "K:\\IDM 6.39.8 mod\\IDM 6.39.8 mod\\IDMan.exe";
-      await child_process.spawn(pathToIDM, ["/d", url2, "/n", "/p", outputPath + "\\data"]);
-    }
+    isExistArr.push(url2.includes(item));
   });
+  if (!isExistArr.includes(true)) {
+    const pathToIDM = "K:\\IDM 6.39.8 mod\\IDM 6.39.8 mod\\IDMan.exe";
+    await child_process.spawn(pathToIDM, ["/d", url2, "/n", "/p", outputPath + "\\data"]);
+  }
   return new Promise((resolve, reject) => {
     setTimeout(() => {
       fs.readdir(outputPath + "\\data", (err, files) => {
