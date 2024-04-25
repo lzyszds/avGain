@@ -18,6 +18,7 @@ build
 .vscode/*
 electron/data/*.json
 !.vscode/extensions.json
+package-lock.json
 .idea
 .DS_Store
 *.suo
