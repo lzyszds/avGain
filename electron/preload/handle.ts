@@ -14,7 +14,7 @@ const validChannels = [
   //下载视频
   'downloadVideoEvent',
   //暂停下载
-  'pauseDownload',
+  'pauseDownloadEvent',
   //获取下载目录内容
   'getDownloadListContent',
   //清除文件夹内的内容
@@ -32,8 +32,13 @@ const validChannels = [
   //获取当前所有的文件夹配置路径
   'onGetAllDirPath',
   //当添加页面初始进来时，发送下载的进度和总数回去
-  'onGetDownloadProgress'
+  'onGetDownloadProgress',
+  // 获取系统日志
+  'onGetSystemLog',
+  //清空系统日志
+  'onClearSystemLog'
 ]
+console.log(`lzy  validChannels:`, validChannels)
 
 const myElectron = {}
 validChannels.forEach((channel) => {

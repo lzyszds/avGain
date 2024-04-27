@@ -1,5 +1,7 @@
 const superagent = require("superagent");
 const fs = require("fs");
+const { exec } = require('child_process');
+
 
 // 封装递归方法
 /* 
@@ -10,20 +12,31 @@ const fs = require("fs");
   headers:请求头
   path:保存文件夹路径
 */
-function getVideo(urlData, i, urlPrefix, headers, path) {
+function getVideo(urlData, i, urlPrefix, headers, path, docPath) {
   if (!urlData[i]) return '没有视频了'
-  const match = urlData[i].uri.match(/(\d{4}).jpg$/);
+  const source = urlData[i].uri.indexOf('video') === 0 ? 'av' : 'super';
+  let match
+  if (source === 'av') {
+    match = urlData[i].uri.match(/(\d+).jpeg$/);
+  } else {
+    match = urlData[i].uri.match(/(\d{4}).jpg$/);
+  }
+
   //如果当前视频节点已经下载完成，就跳过  
   if (fs.existsSync(`${path}/${match[1]}.ts`)) {
-    return getVideo(urlData, ++i, urlPrefix, headers, path);
+    return getVideo(urlData, ++i, urlPrefix, headers, path, docPath);
   }
 
   return new Promise(async (resolve, reject) => {
-
-    let res = await requestWithRetry(urlPrefix + urlData[i].uri, headers)
+    let res
+    try {
+      res = await requestWithRetryLocal(urlPrefix + urlData[i].uri, headers, path, docPath, match[1])
+    } catch (e) {
+      console.log(e);
+    }
 
     if (!res) {
-      await getVideo(urlData, ++i, urlPrefix, headers, path);
+      return await getVideo(urlData, ++i, urlPrefix, headers, path, docPath);
     }
     // 获取文件夹的存储大小
     // 将视频流生成二进制数据
@@ -38,7 +51,7 @@ function getVideo(urlData, i, urlPrefix, headers, path) {
         return;
       }
       if (i < urlData.length) {
-        await getVideo(urlData, ++i, urlPrefix, headers, path);
+        await getVideo(urlData, ++i, urlPrefix, headers, path, docPath);
       } else { // 提示用户下载完成
         resolve('下载完成')
       }
@@ -46,51 +59,84 @@ function getVideo(urlData, i, urlPrefix, headers, path) {
   })
 }
 module.exports = getVideo;
-// const requestWithRetry = (url, headers) => {
-//   return new Promise(async (resolve, reject) => {
-//     try {
-//       // 注意访问 .default 来引用 got 函数
-//       const { default: got } = await import('got');
 
-//       await got(url, {
-//         headers,
-//         retry: {
-//           limit: 3,  // 最大重试次数
-//           methods: ['GET', 'POST', 'PUT', 'DELETE'],  // 应该重试的HTTP方法
-//           statusCodes: [408, 504, 502, 503, 504, 521, 522, 524],  // 重试的HTTP状态码
-//           errorCodes: ['ETIMEDOUT', 'ECONNRESET'], //重试的系统错误
-//         },
-//         responseType: 'buffer',
-//       })
-//         .then((response) => {
-//           resolve(response.body);
-//         })
-//         .catch((error) => {
-//           console.error(error);
-//           return 500;
-//         });
-//     } catch (err) {
-//       console.error(err);
-//       return 500;
-//     }
-//   })
-// };
+//aria2c版本
+const requestWithRetry = (url, headers, path) => {
+  return new Promise(async (resolve, reject) => {
+    try {
+      await aria2cDownload(url, headers, path)
+    } catch (err) {
+      reject(err)
+    }
+  })
+};
 
-const requestWithRetry = async (url, headers, retryCount = 3) => {
+
+
+const requestWithRetryLocal = async (url, headers, path, docPath, name) => {
+  let retryCount = 3
   while (retryCount--) {
+    if (retryCount != 2) {
+      handleLog.set(`正在下载：${name} 超时重试第 ${3 - retryCount} 次 <br/>`, docPath + '/log.txt')
+    } else {
+      handleLog.set(`正在下载：${name} <br/>`, docPath + '/log.txt')
+    }
+
     try {
       const res = await superagent
         .get(url + `?t=${new Date().getTime()}`)
         .set(headers)
         .timeout({
-          response: 1000 * 5,  //等待服务器响应的时间
-          deadline: 1000 * 30, //整个请求完成的时间
+          response: 1000 * 10,  //等待服务器响应的时间
         })
         .responseType('buffer');
       return res.body;
     } catch (err) {
-      if (retryCount === 0 || !err.timeout) return "";
+      if (retryCount === 0) return "";
       console.log('请求超时，正在尝试再次请求...');
     }
   }
 };
+
+
+
+
+//使用aria2c下载
+function aria2cDownload(url, headers, outputPath) {
+  headers = `-H "Accept: */*" -H "accept-language: zh-CN,zh;q=0.9,en;q=0.8" -H "Referer: https://emturbovid.com/" -H "Referrer-Policy: strict-origin-when-cross-origin"`;
+  let name = url.match(/(\d{4}).jpg$/)[1];
+
+  return new Promise((resolve, reject) => {
+    exec(`curl -L -o ${outputPath}/${name}.ts ${headers} ${url}`, (error, stdout, stderr) => {
+      if (error) {
+        console.log(`lzy  error:`, error)
+        reject(error);
+      }
+      if (stderr) {
+        console.log(`lzy  stderr:`, stderr)
+        //弹出错误信息
+        reject(stderr);
+      }
+      resolve(true);
+    });
+  });
+}
+
+
+//设置系统日志功能
+const handleLog = {
+  set: (text, path) => {
+    if (!fs.existsSync(path)) {
+      fs.writeFileSync(path, text, 'utf-8')
+    }
+    fs.appendFileSync(path, text + '\n')
+  },
+  get: (path) => {
+    //如果文件不存在则创建
+    if (!fs.existsSync(path)) {
+      fs.writeFileSync(path, '', 'utf-8')
+    } else {
+      return fs.readFileSync(path, 'utf-8')
+    }
+  }
+}

@@ -12,9 +12,10 @@ const require$$0 = require("events");
 const fs = require("fs");
 const path$1 = require("path");
 const https = require("https");
+const sudo = require("sudo-prompt");
 const elementPlus = require("element-plus");
 const worker_threads = require("worker_threads");
-const child_process$1 = require("child_process");
+const child_process = require("child_process");
 const m3u8Parser = require("m3u8-parser");
 var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
 function getDefaultExportFromCjs(x) {
@@ -834,41 +835,118 @@ function quickSortByTimestamp(arr, key, isIncremental = true) {
     return [...quickSortByTimestamp(greater, key, isIncremental), ...equal, ...quickSortByTimestamp(less, key, isIncremental)];
   }
 }
-const child_process = require("child_process");
-async function downloadM3U8(url2, outputPath) {
-  const dataDir = fs.readdirSync(outputPath + "\\data");
+const { exec } = require("child_process");
+async function downloadM3U8(url2, headers, outputPath, app) {
+  const downloadDir = outputPath + "\\data";
+  const dataDir = fs.readdirSync(downloadDir);
   const isExistArr = [];
   dataDir.forEach(async (item) => {
     isExistArr.push(url2.includes(item));
   });
-  if (!isExistArr.includes(true)) {
-    const pathToIDM = "K:\\IDM 6.39.8 mod\\IDM 6.39.8 mod\\IDMan.exe";
-    await child_process.spawn(pathToIDM, ["/d", url2, "/n", "/p", outputPath + "\\data"]);
-  }
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      fs.readdir(outputPath + "\\data", (err, files) => {
-        if (err) {
-          reject(err);
+  return new Promise(async (resolve, reject) => {
+    await exec("aria2c --help", async (error, stdout, stderr) => {
+      if (error || stderr) {
+        const result = await require$$3.dialog.showMessageBox({
+          type: "info",
+          title: "提示",
+          message: "aria2c不存在，请安装aria2c并配置环境变量",
+          buttons: ["前往下载", "已安装进行环境配置"],
+          cancelId: 0,
+          defaultId: 0
+        });
+        if (result.response === 0) {
+          require$$3.shell.openExternal("https://github.com/aria2/aria2/releases/");
         } else {
-          const fileInfos = [];
-          files.forEach((file, index) => {
-            const fileInfo2 = fs.statSync(outputPath + "\\data\\" + file);
-            if (fileInfo2.isFile()) {
-              fileInfos.push({
-                name: file,
-                time: fileInfo2.birthtimeMs
-              });
-            }
+          const res = await require$$3.dialog.showOpenDialog({
+            title: "选择aria2c安装路径",
+            properties: ["openDirectory"]
           });
-          const fileInfo = quickSortByTimestamp(fileInfos, "time", false)[0];
-          const res = fs.readFileSync(outputPath + "\\data\\" + fileInfo.name, "utf-8");
-          resolve(res);
+          if (!res.canceled) {
+            const path2 = res.filePaths;
+            sudo.exec(`setx /M PATH "%PATH%;${path2}"`, {
+              name: "AvGain"
+            }, (error2, stdout2, stderr2) => {
+              if (stderr2) {
+                require$$3.dialog.showErrorBox("错误", stderr2 + "");
+              }
+              require$$3.dialog.showMessageBox({
+                type: "info",
+                title: "提示",
+                message: "环境变量配置成功，请重启软件",
+                buttons: ["确定"],
+                cancelId: 0,
+                defaultId: 0
+              }).then((result2) => {
+                if (result2.response === 0) {
+                  app.relaunch();
+                }
+              });
+            });
+          }
         }
-      });
-    }, 5e3);
+      }
+    });
+    if (!isExistArr.includes(true)) {
+      await aria2cDownload(url2, headers, downloadDir);
+    }
+    fs.readdir(downloadDir, (err, files) => {
+      if (err) {
+        reject(err);
+      } else {
+        const fileInfos = [];
+        files.forEach((file, index) => {
+          const fileInfo2 = fs.statSync(outputPath + "\\data\\" + file);
+          if (fileInfo2.isFile()) {
+            fileInfos.push({
+              name: file,
+              time: fileInfo2.birthtimeMs
+            });
+          }
+        });
+        const fileInfo = quickSortByTimestamp(fileInfos, "time", false)[0];
+        const res = fs.readFileSync(outputPath + "\\data\\" + fileInfo.name, "utf-8");
+        new require$$3.Notification({
+          title: "下载完成",
+          body: "m3u8文件下载完成，准备开始下载视频"
+        }).show();
+        resolve(res);
+      }
+    });
   });
 }
+function aria2cDownload(url2, headers, outputPath) {
+  headers = '--header="Accept: */*" --header="accept-language: zh-CN,zh;q=0.9,en;q=0.8" --header="Referer: https://emturbovid.com/" --header="Referrer-Policy: strict-origin-when-cross-origin"';
+  return new Promise((resolve, reject) => {
+    exec(`aria2c -d ${outputPath} ${headers} ${url2}`, (error, stdout, stderr) => {
+      if (error) {
+        reject(error);
+      }
+      if (stderr) {
+        require$$3.dialog.showErrorBox("错误", stderr);
+        reject(stderr);
+      }
+      resolve(true);
+    });
+  });
+}
+const handleLog = {
+  set: (text, path2) => {
+    if (!fs.existsSync(path2)) {
+      fs.writeFileSync(path2, text, "utf-8");
+    }
+    fs.appendFileSync(path2, text + "\n");
+  },
+  get: (path2) => {
+    if (!fs.existsSync(path2)) {
+      fs.writeFileSync(path2, "", "utf-8");
+    } else {
+      return fs.readFileSync(path2, "utf-8");
+    }
+  },
+  clear: (path2) => {
+    fs.writeFileSync(path2, "", "utf-8");
+  }
+};
 const ffmpeg = "ffmpeg";
 function merge(name, downPath, videoPath) {
   const filenames = fs.readdirSync(downPath).filter((file) => fs.existsSync(path$1.join(downPath, file))).map((file) => file);
@@ -886,7 +964,7 @@ function merge(name, downPath, videoPath) {
     `${videoPath}/${name}.mp4`
   ];
   return new Promise((resolve, reject) => {
-    child_process$1.execFile(ffmpeg, options, { cwd: downPath, maxBuffer: 1024 * 1024 * 1024 }, (error, stdout, stderr) => {
+    child_process.execFile(ffmpeg, options, { cwd: downPath, maxBuffer: 1024 * 1024 * 1024 }, (error, stdout, stderr) => {
       if (error) {
         console.error(`执行错误: ${error}`);
         reject("合成失败");
@@ -927,7 +1005,7 @@ class WindowManager {
     this.registerHandleStoreData();
     this.registerGetListData();
     this.registerDownloadVideoEvent();
-    this.registerPauseDownload;
+    this.registerPauseDownloadEvent();
     this.registerGetDownloadListContent();
     this.registerDeleteDirFile();
     this.registerCreateDir();
@@ -937,6 +1015,8 @@ class WindowManager {
     this.registerHandleStarVideo();
     this.registerGetAllDirPath();
     this.registerGetDownloadProgress();
+    this.registerGetSystemLog();
+    this.registerClearSystemLog();
   }
   // 处理窗口操作请求
   handleWinAction(arg) {
@@ -1123,7 +1203,7 @@ class WindowManager {
       const designation = getVideoId(name);
       downPath = downPath + `/${designation}`;
       mkdirsSync(downPath);
-      const { urlPrefix, dataArr } = await processM3u8(url2, headers, docPath);
+      const { urlPrefix, dataArr } = await processM3u8(url2, headers, docPath, this.app);
       storeData(this.app, {
         "downloadCount": dataArr.length
       });
@@ -1152,15 +1232,14 @@ class WindowManager {
     require$$3.ipcMain.handle("downloadVideoEvent", this.onDownloadVideoEvent.bind(this));
   }
   //暂停下载
-  onPauseDownload(event, arg) {
-    if (arg) {
-      this.workerArr.forEach((worker) => {
-        worker.terminate();
-      });
-    }
+  onPauseDownloadEvent(event, arg) {
+    console.log(`lzy  this.workerArr:`, this.workerArr);
+    this.workerArr.forEach((worker) => {
+      worker.terminate();
+    });
   }
-  registerPauseDownload() {
-    require$$3.ipcMain.handle("pauseDownload", this.onPauseDownload.bind(this));
+  registerPauseDownloadEvent() {
+    require$$3.ipcMain.handle("pauseDownloadEvent", this.onPauseDownloadEvent.bind(this));
   }
   //获取下载目录内容
   onGetDownloadListContent(event, arg) {
@@ -1338,17 +1417,39 @@ class WindowManager {
   registerGetDownloadProgress() {
     require$$3.ipcMain.handle("onGetDownloadProgress", this.onGetDownloadProgress.bind(this));
   }
+  //获取系统日志
+  onGetSystemLog(event, arg) {
+    const storePath = path$1.join(this.app.getPath("documents"), "javPlayer");
+    const logFilePath = path$1.join(storePath, "log.txt");
+    try {
+      const logFile = handleLog.get(logFilePath);
+      return logFile;
+    } catch (e) {
+      return "暂无日志";
+    }
+  }
+  registerGetSystemLog() {
+    require$$3.ipcMain.handle("onGetSystemLog", this.onGetSystemLog.bind(this));
+  }
+  //清空系统日志
+  onClearSystemLog(event, arg) {
+    const storePath = path$1.join(this.app.getPath("documents"), "javPlayer");
+    const logFilePath = path$1.join(storePath, "log.txt");
+    try {
+      handleLog.clear(logFilePath);
+      return "清空成功";
+    } catch (e) {
+      return "清空失败";
+    }
+  }
+  registerClearSystemLog() {
+    require$$3.ipcMain.handle("onClearSystemLog", this.onClearSystemLog.bind(this));
+  }
 }
 function getHeaders(resource) {
   let headers = {
     "accept": "*/*",
-    "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
-    "sec-ch-ua": '"Not/A)Brand";v="99", "Google Chrome";v="115", "Chromium";v="115"',
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": '"Windows"',
-    "sec-fetch-dest": "empty",
-    "sec-fetch-mode": "cors",
-    "sec-fetch-site": "cross-site"
+    "accept-language": "zh-CN,zh;q=0.9,en;q=0.8"
   };
   if (resource === "SuperJav") {
     Object.assign(headers, {
@@ -1357,8 +1458,8 @@ function getHeaders(resource) {
     });
   } else {
     Object.assign(headers, {
-      "Origin": "https://missav.com",
-      "Referer": "https://missav.com/cn/pppd-985-uncensored-leak"
+      "Referer": "https://missav.com/cn/pppd-985-uncensored-leak",
+      "Origin": "https://missav.com"
     });
   }
   return headers;
@@ -1418,11 +1519,11 @@ function getPreviewVideo(id, name, getCoverIndex, previewPath, coverPath) {
 function sanitizeVideoName(name) {
   return name.replace("[无码破解]", "").replaceAll(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, "").replaceAll(/[\·\・\●\/]/g, "").replaceAll(" ", "");
 }
-async function processM3u8(url2, headers, docPath) {
+async function processM3u8(url2, headers, docPath, app) {
   let videoName = url2.split("/")[url2.split("/").length - 1].split(".")[0];
   let urlPrefix = url2.split("/").splice(0, url2.split("/").length - 1).join("/") + "/";
   try {
-    const m3u8Data = await downloadM3U8(url2, docPath);
+    const m3u8Data = await downloadM3U8(url2, headers, docPath, app);
     const myParser = new m3u8Parser.Parser();
     myParser.push(m3u8Data);
     myParser.end();

@@ -6,7 +6,8 @@ import https from 'https'
 import {
   mkdirsSync,
   createSystemStore, formatFileSize, quickSortByTimestamp, storeData, getStoreData,
-  checkFileFoundError, getFolderSize, downloadM3U8
+  checkFileFoundError, getFolderSize, downloadM3U8,
+  handleLog
 } from '../utils/utils'; // 假设您有一个名为 'utils' 的模块用于创建目录
 import { dayjs } from 'element-plus'
 import { Worker } from "worker_threads";
@@ -56,7 +57,7 @@ export class WindowManager {
     this.registerHandleStoreData()//存储数据进入系统存储文件夹
     this.registerGetListData()//获取视频列表数据
     this.registerDownloadVideoEvent()//下载视频
-    this.registerPauseDownload //暂停下载
+    this.registerPauseDownloadEvent() //暂停下载
     this.registerGetDownloadListContent()//获取下载目录内容
     this.registerDeleteDirFile()//清除文件夹内的内容
     this.registerCreateDir()//创建文件夹
@@ -66,6 +67,8 @@ export class WindowManager {
     this.registerHandleStarVideo()//收藏视频
     this.registerGetAllDirPath()//获取当前所有的文件夹配置路径
     this.registerGetDownloadProgress()//获取当前所有的视频路径
+    this.registerGetSystemLog()//获取系统日志
+    this.registerClearSystemLog()//清空系统日志
   }
 
   // 处理窗口操作请求
@@ -284,7 +287,7 @@ export class WindowManager {
 
 
       // 从M3U8 URL计算出需要下载的视频文件信息。
-      const { urlPrefix, dataArr } = await processM3u8(url, headers, docPath);
+      const { urlPrefix, dataArr } = await processM3u8(url, headers, docPath, this.app);
 
       //将视频数量存入store中
       storeData(this.app, {
@@ -324,18 +327,15 @@ export class WindowManager {
     ipcMain.handle('downloadVideoEvent', this.onDownloadVideoEvent.bind(this));
   }
 
-
   //暂停下载
-  private onPauseDownload(event: Electron.IpcMainInvokeEvent, arg: any) {
-    //arg传入下载路径
-    if (arg) {
-      this.workerArr.forEach((worker) => {
-        worker.terminate()
-      })
-    }
+  private onPauseDownloadEvent(event: Electron.IpcMainInvokeEvent, arg: any) {
+    console.log(`lzy  this.workerArr:`, this.workerArr)
+    this.workerArr.forEach((worker) => {
+      worker.terminate()
+    })
   }
-  private registerPauseDownload(): void {
-    ipcMain.handle('pauseDownload', this.onPauseDownload.bind(this));
+  private registerPauseDownloadEvent(): void {
+    ipcMain.handle('pauseDownloadEvent', this.onPauseDownloadEvent.bind(this));
   }
 
   //获取下载目录内容
@@ -548,6 +548,36 @@ export class WindowManager {
   private registerGetDownloadProgress(): void {
     ipcMain.handle('onGetDownloadProgress', this.onGetDownloadProgress.bind(this));
   }
+
+  //获取系统日志
+  private onGetSystemLog(event: Electron.IpcMainInvokeEvent, arg: any) {
+    const storePath = path.join(this.app.getPath('documents'), 'javPlayer')
+    const logFilePath = path.join(storePath, 'log.txt')
+    try {
+      const logFile = handleLog.get(logFilePath)
+      return logFile
+    } catch (e) {
+      return '暂无日志'
+    }
+  }
+  private registerGetSystemLog(): void {
+    ipcMain.handle('onGetSystemLog', this.onGetSystemLog.bind(this));
+  }
+
+  //清空系统日志
+  private onClearSystemLog(event: Electron.IpcMainInvokeEvent, arg: any) {
+    const storePath = path.join(this.app.getPath('documents'), 'javPlayer')
+    const logFilePath = path.join(storePath, 'log.txt')
+    try {
+      handleLog.clear(logFilePath)
+      return '清空成功'
+    } catch (e) {
+      return '清空失败'
+    }
+  }
+  private registerClearSystemLog(): void {
+    ipcMain.handle('onClearSystemLog', this.onClearSystemLog.bind(this));
+  }
 }
 
 
@@ -556,12 +586,6 @@ function getHeaders(resource) {
   let headers = {
     "accept": "*/*",
     "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
-    "sec-ch-ua": "\"Not/A)Brand\";v=\"99\", \"Google Chrome\";v=\"115\", \"Chromium\";v=\"115\"",
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": "\"Windows\"",
-    "sec-fetch-dest": "empty",
-    "sec-fetch-mode": "cors",
-    "sec-fetch-site": "cross-site",
   }
   if (resource === 'SuperJav') {
     Object.assign(headers, {
@@ -570,8 +594,8 @@ function getHeaders(resource) {
     })
   } else {
     Object.assign(headers, {
-      "Origin": "https://missav.com",
-      "Referer": "https://missav.com/cn/pppd-985-uncensored-leak"
+      "Referer": "https://missav.com/cn/pppd-985-uncensored-leak",
+      "Origin": "https://missav.com"
     })
   }
   return headers
@@ -666,13 +690,13 @@ function sanitizeVideoName(name) {
 }
 
 // 把处理M3U8的逻辑抽离为一个单独的函数。
-async function processM3u8(url, headers, docPath) {
+async function processM3u8(url, headers, docPath, app) {
   let videoName = url.split('/')[url.split('/').length - 1].split('.')[0];
   let urlPrefix = url.split('/').splice(0, url.split('/').length - 1).join('/') + '/';
   try {
     // const { default: got } = await import('got');
 
-    const m3u8Data = await downloadM3U8(url, docPath);
+    const m3u8Data = await downloadM3U8(url, headers, docPath, app);
     const myParser = new m3u8Parser.Parser();
     myParser.push(m3u8Data);
     myParser.end();

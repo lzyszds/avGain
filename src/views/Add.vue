@@ -1,8 +1,11 @@
 <script lang="ts" setup>
 import { computed, reactive, ref, watch } from "vue";
-import { ElNotification } from "element-plus";
+import { ElNotification, dayjs } from "element-plus";
 import LzyIcon from "@/components/LzyIcon.vue";
 import { useStorage } from "@vueuse/core";
+import duration from "dayjs/plugin/duration";
+
+dayjs.extend(duration);
 
 const el = window.myElectron;
 
@@ -56,9 +59,18 @@ const newPage = ref(1);
 
 let timer,
   downLoadAfterCopy: number[] = [];
+//下载时间计时器
+const counter = ref(0);
+
+const downloadTime = computed(() => {
+  return dayjs.duration(counter.value, "seconds").format("HH:mm:ss");
+});
+
 async function onSubmit() {
   isStartDown.value = !isStartDown.value;
   if (!isStartDown.value) {
+    timer && clearInterval(timer);
+    await el.pauseDownloadEvent();
     return ElNotification({
       title: "下载已暂停",
       message: sizeForm.value.name,
@@ -84,7 +96,7 @@ async function onSubmit() {
     downloadHistory.value.unshift({ ...sizeForm.value });
     appStoreData("downloadHistory", downloadHistory.value);
   }
-
+  await getSystemLog();
   timer = setInterval(async () => {
     storeData.value = await el.onGetDownloadProgress(name);
     const { downLoadAfter: after, downloadCount: count } = storeData.value;
@@ -93,20 +105,26 @@ async function onSubmit() {
     } else {
       downLoadAfterCopy[after] += 1;
     }
-    if (downLoadAfterCopy[after] > 60) {
+    //如果下载不动 时间超过60秒，则重新开始下载
+    if (downLoadAfterCopy[after] > 30) {
       ElNotification({
         title: "下载提示：",
         message: "下载异常，已停止下载",
         type: "error",
       });
       downLoadAfterCopy = [];
+      isStartDown.value = false;
+      timer && clearInterval(timer);
+      //重新开始下载
+      return onSubmit();
     } else {
       // 更新下载列表内容
       getDownloadListContent();
       updateSpeedDownload();
     }
+    counter.value++;
+
     // 判断是否下载完成
-    console.log(`lzy  after == count:`, after == count);
     if (after == count || downLoadAfterCopy.length === 0) {
       ElNotification({
         title: "下载提示：",
@@ -114,8 +132,11 @@ async function onSubmit() {
         type: "success",
       });
       timer && clearInterval(timer);
+      logData.logTimer && clearInterval(logData.logTimer);
       //视频下载完成后，将视频进行合并
-      el.onMergeVideo({ name });
+      await el.onMergeVideo({ name });
+      counter.value = 0;
+      isStartDown.value = false;
     }
   }, 1000);
   try {
@@ -267,6 +288,24 @@ function handleHistory(currentPage: number = 1): any {
   }
   return result[currentPage - 1];
 }
+
+const logData = reactive({
+  value: "", //日志内容
+  logTimer: null as any, //日志定时器
+  isOnScroll: true, //是否自动滚动
+});
+const getSystemLog = async () => {
+  await el.onClearSystemLog();
+  logData.logTimer && clearInterval(logData.logTimer);
+  logData.logTimer = setInterval(async () => {
+    logData.value = await el.onGetSystemLog();
+    //如果自动滚动条开启，则将滚动条滚动到最底部
+    if (!logData.isOnScroll) return;
+    //将滚动条滚动到最底部
+    const systemLog = document.querySelector(".systemLog > div") as HTMLElement;
+    systemLog.scrollTop = systemLog.scrollHeight;
+  }, 500);
+};
 </script>
 <template>
   <div class="addWhole">
@@ -307,6 +346,14 @@ function handleHistory(currentPage: number = 1): any {
           icon="gg:merge-horizontal"
         ></LzyBtn>
       </li>
+      <div class="systemLog">
+        <div v-html="logData.value"></div>
+        <LzyBtn
+          icon="fluent:send-logging-24-filled"
+          :title="(logData.isOnScroll ? '关闭' : '开启') + '系统日志滚动'"
+          @click="logData.isOnScroll = !logData.isOnScroll"
+        ></LzyBtn>
+      </div>
     </ul>
     <div class="addMain">
       <h1 style="text-align: center; padding-bottom: 20px">
@@ -345,9 +392,11 @@ function handleHistory(currentPage: number = 1): any {
           <!-- v-show="speedDownload" -->
           <span style="text-align: left">下载速度：{{ speedDownload }}/s</span>
           <el-progress :text-inside="true" :percentage="percentage" />
-          <span>
-            {{ storeData.downLoadAfter }}/{{ storeData.downloadCount }}
-          </span>
+          <div class="timeSpeed">
+            <p>{{ storeData.downLoadAfter }}/{{ storeData.downloadCount }}</p>
+            <p>{{ downloadTime }}</p>
+          </div>
+
           <button class="button download" @click="onSubmit" type="button">
             <span class="button__text"
               >{{ isStartDown ? "暂停" : "开始" }}下载</span
@@ -452,6 +501,7 @@ ul {
   padding: 0 20px;
   height: calc(100vh - 60px);
   font-size: 17px;
+  position: relative;
 
   li {
     &:first-child {
@@ -481,6 +531,20 @@ ul {
       grid-template-columns: 1fr 1fr;
       grid-template-rows: 1fr 1fr;
       gap: 10px;
+    }
+  }
+  .systemLog {
+    position: absolute;
+    bottom: 20px;
+    display: grid;
+    gap: 5px;
+    width: 100%;
+    & > div {
+      overflow-y: auto;
+      height: 200px;
+      border: 2px solid var(--themeColor);
+      border-radius: 10px;
+      font-size: 12px;
     }
   }
 }
@@ -524,13 +588,30 @@ ul {
 
   .sumbit :deep(.el-form-item__content) {
     justify-content: end;
-    gap: 20px;
+    gap: 10px;
     display: grid;
-    grid-template-columns: 150px 1fr 60px 150px;
-
+    grid-template-columns: 160px 1fr 80px 130px;
     span {
       text-align: center;
       color: #fff;
+    }
+    .timeSpeed {
+      height: 30px;
+      display: grid;
+      grid-template-rows: 1fr 1fr;
+      text-align: center;
+      box-shadow: 3px 2px 1px #000;
+      border: 1px solid #000;
+      border-radius: 5px;
+      background-color: #eeeeee;
+      padding: 2.5px;
+      p {
+        margin: 0;
+        height: 15px;
+        line-height: 15px;
+        font-family: "almama";
+        color: #000;
+      }
     }
   }
 
