@@ -700,33 +700,44 @@ function sanitizeVideoName(name) {
     .replaceAll(' ', '');
 }
 
-// 把处理M3U8的逻辑抽离为一个单独的函数。
+/**
+ * 处理M3U8文件的逻辑。
+ * 
+ * @param url M3U8文件的URL地址。
+ * @param headers 请求M3U8文件时的HTTP头信息。
+ * @param docPath 保存下载文件的文档路径。
+ * @param app 用于下载文件的应用上下文（可能用于鉴权等）。
+ * @returns 返回一个Promise，解析为一个对象，包含视频名称、URL前缀和未下载的段数据数组。
+ */
 async function processM3u8(url, headers, docPath, app) {
+  // 从URL中提取视频名称
   let videoName = url.split('/')[url.split('/').length - 1].split('.')[0];
+  // 计算URL前缀
   let urlPrefix = url.split('/').splice(0, url.split('/').length - 1).join('/') + '/';
-  try {
-    // const { default: got } = await import('got');
 
+  try {
+    // 下载M3U8文件
     const m3u8Data = await downloadM3U8(url, headers, docPath, app);
+    // 解析M3U8文件
     const myParser = new m3u8Parser.Parser();
     myParser.push(m3u8Data);
     myParser.end();
-    // 要获取数据，
-    let dataArr = myParser.manifest.segments
-    //清除掉已经下载过的文件
+
+    // 获取并过滤已下载的段数据
+    let dataArr = myParser.manifest.segments;
     dataArr = dataArr.filter((item) => {
       const filePath = path.join(docPath, videoName, item.uri);
       return !fs.existsSync(filePath);
     });
 
     return { videoName, urlPrefix, dataArr };
-  } catch (e: any) {
-    console.error('处理M3U8文件出错:', e.message);
+  } catch (e) {
+    handleLog.set(`🔴 下载出错: ${e} <br/>`, docPath + '/log.txt')
+    // 出错时返回空的段数据数组
     return { videoName, urlPrefix, dataArr: [] };
   }
 
 }
-
 
 
 //清空文件夹内容

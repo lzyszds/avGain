@@ -1567,7 +1567,7 @@ async function processM3u8(url2, headers, docPath, app) {
     });
     return { videoName, urlPrefix, dataArr };
   } catch (e) {
-    console.error("处理M3U8文件出错:", e.message);
+    handleLog.set(`🔴 下载出错: ${e} <br/>`, docPath + "/log.txt");
     return { videoName, urlPrefix, dataArr: [] };
   }
 }

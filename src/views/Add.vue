@@ -126,13 +126,15 @@ async function onSubmit() {
     // 判断是否下载完成
     if (after == count || downLoadAfterCopy.length === 0) {
       timer && clearInterval(timer);
-      logData.logTimer && clearInterval(logData.logTimer);
       //视频下载完成后，将视频进行合并
       await onMergeVideo();
       counter.value = 0;
       isStartDown.value = false;
-      getDownloadListContent();
-      updateSpeedDownload();
+
+      setTimeout(() => {
+        getDownloadListContent();
+        updateSpeedDownload();
+      }, 1000);
     }
   }, 1000);
   try {
@@ -284,6 +286,7 @@ const logData = reactive({
   isOnScroll: true, //是否自动滚动
 });
 const getSystemLog = async () => {
+  const systemLog = document.querySelector(".systemLog > div") as HTMLElement;
   // await el.onClearSystemLog();
   logData.logTimer && clearInterval(logData.logTimer);
   logData.logTimer = setInterval(async () => {
@@ -293,10 +296,10 @@ const getSystemLog = async () => {
     if (logData.value.length > 100) {
       logData.value = logData.value.slice(logData.value.length - 100);
     }
+    console.log(`lzy  logData.isOnScroll:`, logData.isOnScroll);
     //如果自动滚动条开启，则将滚动条滚动到最底部
     if (!logData.isOnScroll) return;
     //将滚动条滚动到最底部
-    const systemLog = document.querySelector(".systemLog > div") as HTMLElement;
     systemLog.scrollTop = systemLog.scrollHeight;
   }, 500);
 };
