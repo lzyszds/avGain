@@ -40,16 +40,18 @@ onMounted(() => {
         key: "plyr",
       },
       /* 默认音量 */
-      volume: Number(JSON.parse(localStorage.getItem("plyr")!).volume) || 0.5,
+      volume: 0.5,
       /* 快进时间 */
       seekTime: 10,
       /* 播放速度 */
       speed: {
-        selected: 1.5,
-        options: [0.75, 1.5, 2, 2.5],
+        selected: 1,
+        options: [0.75, 1, 1.5, 2, 2.5],
       },
     });
-  } catch (err) {}
+  } catch (err) {
+    console.log(err);
+  }
   window!.player = player;
   setTimeout(async () => {
     //获取video元素
@@ -62,6 +64,12 @@ onMounted(() => {
       videoElement.insertAdjacentElement("afterend", div);
     }
 
+    // 监听播放速度的改变事件
+    player.on("ratechange", function () {
+      // 将新的播放速度保存到localStorage
+      localStorage.setItem("playbackRate", player.speed);
+    });
+
     //判断是否存在文件夹路径 存在则获取视频数据
     if (dirPath.cover.path && dirPath.video.path && dirPath.preview.path) {
       // 初始化数据
@@ -69,6 +77,8 @@ onMounted(() => {
     } else {
       setDialog.value = true;
     }
+
+    player.speed = localStorage.getItem("playbackRate") || 1.25;
   }, 500);
 });
 const router = useRouter(); //路由

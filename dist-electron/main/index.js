@@ -905,10 +905,7 @@ async function downloadM3U8(url2, headers, outputPath, app) {
         });
         const fileInfo = quickSortByTimestamp(fileInfos, "time", false)[0];
         const res = fs.readFileSync(outputPath + "\\data\\" + fileInfo.name, "utf-8");
-        new require$$3.Notification({
-          title: "下载完成",
-          body: "m3u8文件下载完成，准备开始下载视频"
-        }).show();
+        handleLog.set("📋 m3u8文件下载完成，准备开始下载视频 <br/>", outputPath + "\\log.txt");
         resolve(res);
       }
     });
@@ -917,7 +914,11 @@ async function downloadM3U8(url2, headers, outputPath, app) {
 function aria2cDownload(url2, headers, outputPath) {
   headers = '--header="Accept: */*" --header="accept-language: zh-CN,zh;q=0.9,en;q=0.8" --header="Referer: https://emturbovid.com/" --header="Referrer-Policy: strict-origin-when-cross-origin"';
   return new Promise((resolve, reject) => {
-    exec(`aria2c -d ${outputPath} ${headers} ${url2}`, (error, stdout, stderr) => {
+    let o = "";
+    if (/video\.m3u8$/.test(url2)) {
+      o = "-o " + url2.split("/")[3] + ".m3u8";
+    }
+    exec(`aria2c -d ${outputPath} ${o} ${headers} ${url2}`, (error, stdout, stderr) => {
       if (error) {
         reject(error);
       }
@@ -930,11 +931,24 @@ function aria2cDownload(url2, headers, outputPath) {
   });
 }
 const handleLog = {
-  set: (text, path2) => {
+  set: (text, path2, isProgress = false) => {
     if (!fs.existsSync(path2)) {
       fs.writeFileSync(path2, text, "utf-8");
     }
-    fs.appendFileSync(path2, text + "\n");
+    if (isProgress) {
+      var regex = /(\🟢 合成成功 )(\d+)(%)/;
+      try {
+        var data = fs.readFileSync(path2, "utf-8");
+        var lines = data.split("<br/>");
+        lines = lines.filter((line) => {
+          return !regex.test(line);
+        });
+        fs.writeFileSync(path2, lines.join("<br/>"), "utf-8");
+      } catch (err) {
+        console.log(err);
+      }
+    }
+    fs.appendFileSync(path2, text + "<br/>");
   },
   get: (path2) => {
     if (!fs.existsSync(path2)) {
@@ -948,29 +962,46 @@ const handleLog = {
   }
 };
 const ffmpeg = "ffmpeg";
-function merge(name, downPath, videoPath) {
-  const filenames = fs.readdirSync(downPath).filter((file) => fs.existsSync(path$1.join(downPath, file))).map((file) => file);
+const userDocPath = path$1.join(process.env.USERPROFILE, "Documents");
+const logPath = path$1.join(userDocPath, "javPlayer", "log.txt");
+async function merge(name, downPath, videoPath) {
+  let filenames = fs.readdirSync(downPath).filter((file) => fs.existsSync(path$1.join(downPath, file)));
   if (!filenames.length)
-    return "没有找到ts文件";
-  const options = [
-    "-i",
-    `concat:${filenames.join("|")}`,
-    "-c",
-    "copy",
-    "-bsf:a",
-    "aac_adtstoasc",
-    "-movflags",
-    "+faststart",
-    `${videoPath}/${name}.mp4`
-  ];
+    return handleLog.set("🔴 没有找到文件 <br/>", logPath);
+  filenames.sort((a, b) => parseInt(a.split(".")[0]) - parseInt(b.split(".")[0]));
+  const batchSize = 50;
+  const outputFiles = [];
+  try {
+    fs.writeFileSync(`${downPath}/input.txt`, "");
+    for (let i = 0; i < filenames.length; i += batchSize) {
+      const batch = filenames.slice(i, i + batchSize);
+      const batchFile = `${downPath}/${name}${i / batchSize}.mp4`;
+      const options = ["-i", `concat:${batch.join("|")}`, "-c", "copy", batchFile];
+      await processQueue(options, downPath);
+      outputFiles.push(batchFile);
+      fs.appendFileSync(`${downPath}/input.txt`, `file '${name}${i / batchSize}.mp4'
+`);
+      const count = Math.floor(i / filenames.length * 100);
+      handleLog.set(`🟢 合成成功 ${count}% <br/>`, logPath, true);
+    }
+    const mergeOptions = generateOptions(`${videoPath}/${name}.mp4`);
+    return await processQueue(mergeOptions, downPath);
+  } catch (error) {
+    return "合成失败";
+  }
+}
+function generateOptions(outputFile) {
+  return ["-f", "concat", "-safe", "0", "-i", "input.txt", "-c", "copy", outputFile];
+}
+function processQueue(options, cwd) {
   return new Promise((resolve, reject) => {
-    child_process.execFile(ffmpeg, options, { cwd: downPath, maxBuffer: 1024 * 1024 * 1024 }, (error, stdout, stderr) => {
+    child_process.execFile(ffmpeg, options, { cwd, maxBuffer: 2048 * 2048 * 2048 }, (error, stdout, stderr) => {
       if (error) {
-        console.error(`执行错误: ${error}`);
+        handleLog.set("合成失败" + error, logPath);
+        console.log(`lzy  error:`, error);
         reject("合成失败");
-      } else {
-        resolve("合成成功");
       }
+      resolve("合成成功");
     });
   });
 }
@@ -988,7 +1019,9 @@ class WindowManager {
     __publicField(this, "mainWindow");
     __publicField(this, "pathJson");
     __publicField(this, "workerArr");
-    __publicField(this, "downloadPlanArr");
+    __publicField(this, "docPath");
+    __publicField(this, "setLog");
+    __publicField(this, "taskArray", []);
     this.win = win2;
     this.app = app;
     this.mainWindow = mainWindow;
@@ -999,7 +1032,8 @@ class WindowManager {
       videoPath: "",
       downloadPath: ""
     };
-    this.downloadPlanArr = [];
+    this.docPath = path$1.join(this.app.getPath("documents"), "javPlayer");
+    this.setLog = (msg) => handleLog.set(msg, this.docPath + "\\log.txt");
     this.registerHandleWin();
     this.registerHandleOpenDir();
     this.registerHandleStoreData();
@@ -1108,17 +1142,14 @@ class WindowManager {
    */
   async onHandleStoreData(event, arg) {
     let data = arg, newdata;
-    const storePath = path$1.join(this.app.getPath("documents"), "javPlayer");
+    const storeFilePath = path$1.join(this.docPath, "storeLog.json");
+    const storeFile = fs.readFileSync(storeFilePath, "utf-8");
     if (typeof data === "string") {
-      const storeFilePath = path$1.join(storePath, "storeLog.json");
-      const storeFile = fs.readFileSync(storeFilePath, "utf-8");
       if (!storeFile)
         return null;
       const json = JSON.parse(storeFile);
       return json[data];
     } else {
-      const storeFilePath = path$1.join(storePath, "storeLog.json");
-      const storeFile = fs.readFileSync(storeFilePath, "utf-8");
       if (storeFile) {
         const storeData2 = JSON.parse(storeFile);
         newdata = Object.assign(storeData2, data);
@@ -1141,6 +1172,7 @@ class WindowManager {
       videoPath,
       starArr
     } = this.onGetAllDirPath(event, "all");
+    const that = this;
     const existArr = fs.readdirSync(videoPath);
     const coverList = fs.readdirSync(coverPath).map((file) => {
       if (!file.startsWith(".") && file.indexOf("Thumbs") == 0)
@@ -1181,7 +1213,7 @@ class WindowManager {
       const videoId = getVideoId(item);
       if (videoId) {
         const name = item.split(".mp4")[0];
-        getPreviewVideo(videoId, name, 0, previewPath, coverPath);
+        that.getPreviewVideo(videoId, name, 0, previewPath, coverPath);
       }
     });
     const videoListData = quickSortByTimestamp(coverList.filter((res) => res), "stampTime", false);
@@ -1196,23 +1228,21 @@ class WindowManager {
     const that = this;
     return new Promise(async (resolve, reject) => {
       const appPath = path$1.join(__dirname, `../../electron`);
-      const docPath = path$1.join(this.app.getPath("documents"), "javPlayer");
       let { resource, name, url: url2, thread, downPath, previewPath, coverPath, videoPath } = arg;
       const headers = getHeaders(resource);
       name = sanitizeVideoName(name);
       const designation = getVideoId(name);
       downPath = downPath + `/${designation}`;
       mkdirsSync(downPath);
-      const { urlPrefix, dataArr } = await processM3u8(url2, headers, docPath, this.app);
+      const { urlPrefix, dataArr } = await processM3u8(url2, headers, this.docPath, this.app);
       storeData(this.app, {
         "downloadCount": dataArr.length
       });
       if (dataArr.length === 0) {
-        console.log("无法验证第一个证书");
+        this.setLog("🔴 无法验证第一个证书 <br/>");
         return resolve("无法验证第一个证书");
       }
       const countArr = splitArrayIntoEqualChunks(dataArr, thread);
-      that.downloadPlanArr = countArr;
       for (let i = 0; i < thread; i++) {
         const separateThread = new worker_threads.Worker(appPath + `\\seprate\\seprateThread${i + 1}.js`);
         separateThread.postMessage({
@@ -1221,7 +1251,7 @@ class WindowManager {
           headers,
           urlPrefix,
           downPath,
-          docPath
+          docPath: that.docPath
         });
         that.workerArr.push(separateThread);
       }
@@ -1233,10 +1263,10 @@ class WindowManager {
   }
   //暂停下载
   onPauseDownloadEvent(event, arg) {
-    console.log(`lzy  this.workerArr:`, this.workerArr);
     this.workerArr.forEach((worker) => {
       worker.terminate();
     });
+    this.setLog("🟡 下载任务已暂停<br/>");
   }
   registerPauseDownloadEvent() {
     require$$3.ipcMain.handle("pauseDownloadEvent", this.onPauseDownloadEvent.bind(this));
@@ -1269,9 +1299,9 @@ class WindowManager {
             fs.unlinkSync(arg + "/" + file);
           }
         });
-        return "删除成功";
+        return this.setLog("🟡 清空文件夹成功 <br/>");
       } catch (e) {
-        return "删除失败";
+        return this.setLog(`🔴 清空文件夹失败 ${e} <br/>`);
       }
     }
   }
@@ -1289,15 +1319,16 @@ class WindowManager {
   }
   onHandleDeleteFile(event, arg) {
     const name = arg.split("/")[1].split(".mp4")[0];
+    const setLog = this.setLog;
     const { videoPath, previewPath, coverPath } = this.pathJson;
     fs.access(`${videoPath}/${name}.mp4`, (err) => {
       if (err)
-        return console.log("文件不存在");
+        return setLog("🔴 文件不存在 <br/>");
       try {
         fs.unlinkSync(`${videoPath}/${name}.mp4`);
       } catch (e) {
         if (e)
-          console.log("删除文件失败", e.message);
+          setLog("🔴 文件占用，等待2分钟后再次删除 <br/>");
         setTimeout(() => {
           fs.unlinkSync(`${videoPath}/${name}.mp4`);
         }, 500);
@@ -1305,12 +1336,12 @@ class WindowManager {
     });
     fs.access(`${previewPath}/${name}.mp4`, (err) => {
       if (err)
-        return console.log("文件不存在");
+        return setLog("🔴 文件不存在 <br/>");
       fs.unlinkSync(`${previewPath}/${name}.mp4`);
     });
     fs.access(`${coverPath}/${name}.jpg`, (err) => {
       if (err)
-        return console.log("文件不存在");
+        return setLog("🔴 文件不存在 <br/>");
       fs.unlinkSync(`${coverPath}/${name}.jpg`);
     });
   }
@@ -1319,20 +1350,25 @@ class WindowManager {
   }
   //合并视频的逻辑
   async onMergeVideo(event, arg) {
+    this.setLog(`🟢 开始合并视频 <br/>`);
     let getCoverIndex = 0;
     const { previewPath, coverPath, downloadPath, videoPath } = this.pathJson;
     let { name } = arg;
     name = sanitizeVideoName(name);
     const designation = getVideoId(name);
     if (!designation)
-      return "番号不正确";
+      return this.setLog(`🔴 未找到番号 <br/>`);
     const existArr = fs.existsSync(videoPath + "/" + name + ".mp4");
     if (existArr)
-      return "视频已经存在，无需合并";
+      return this.setLog(`🟢 视频已存在 无需进行合并 <br/>`);
     const resulted = await merge(name, downloadPath + `/${designation}`, videoPath);
     if (resulted === "合成成功") {
-      await getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
-      await fs.rmSync(downloadPath + `/${designation}`, { recursive: true });
+      await this.getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
+      fs.rm(downloadPath + `/${designation}`, { recursive: true }, (err) => {
+        if (err)
+          return this.setLog(`🔴 分段视频删除失败:${err} <br/>`);
+        this.setLog(`🟢 视频合并成功,分段视频已删除 <br/>`);
+      });
       return name;
     } else {
       return resulted;
@@ -1351,8 +1387,7 @@ class WindowManager {
   }
   //收藏视频
   onHandleStarVideo(event, arg) {
-    const storePath = path$1.join(this.app.getPath("documents"), "javPlayer");
-    const storeFilePath = path$1.join(storePath, "storeLog.json");
+    const storeFilePath = path$1.join(this.docPath, "storeLog.json");
     const storeFile = fs.readFileSync(storeFilePath, "utf-8");
     const storeData2 = JSON.parse(storeFile);
     let starArr = storeData2.starArr;
@@ -1376,8 +1411,7 @@ class WindowManager {
   }
   //获取当前所有的文件夹配置路径
   onGetAllDirPath(event, arg) {
-    const storePath = path$1.join(this.app.getPath("documents"), "javPlayer");
-    const storeFilePath = path$1.join(storePath, "storeLog.json");
+    const storeFilePath = path$1.join(this.docPath, "storeLog.json");
     const storeFile = fs.readFileSync(storeFilePath, "utf-8");
     if (!storeFile) {
       createSystemStore(this.app);
@@ -1419,13 +1453,12 @@ class WindowManager {
   }
   //获取系统日志
   onGetSystemLog(event, arg) {
-    const storePath = path$1.join(this.app.getPath("documents"), "javPlayer");
-    const logFilePath = path$1.join(storePath, "log.txt");
+    const logFilePath = path$1.join(this.docPath, "log.txt");
     try {
       const logFile = handleLog.get(logFilePath);
       return logFile;
     } catch (e) {
-      return "暂无日志";
+      return `🔴 获取日志失败 <br/>`;
     }
   }
   registerGetSystemLog() {
@@ -1433,17 +1466,56 @@ class WindowManager {
   }
   //清空系统日志
   onClearSystemLog(event, arg) {
-    const storePath = path$1.join(this.app.getPath("documents"), "javPlayer");
-    const logFilePath = path$1.join(storePath, "log.txt");
+    const logFilePath = path$1.join(this.docPath, "log.txt");
     try {
       handleLog.clear(logFilePath);
-      return "清空成功";
+      return this.setLog(`🟡 清空日志成功 <br/>`);
     } catch (e) {
-      return "清空失败";
+      return this.setLog(`🔴 清空日志失败 <br/>`);
     }
   }
   registerClearSystemLog() {
     require$$3.ipcMain.handle("onClearSystemLog", this.onClearSystemLog.bind(this));
+  }
+  getPreviewVideo(id, name, getCoverIndex, previewPath, coverPath) {
+    return new Promise((resolve, reject) => {
+      const host = "https://eightcha.com/";
+      const that = this;
+      id = id.toLowerCase();
+      let getHoverCoverIndex = 0;
+      if (getCoverIndex >= 5 || getHoverCoverIndex >= 5)
+        return;
+      const url2 = host + `${id}/cover.jpg?class=normal`;
+      https.get(url2, (response) => {
+        const localPath = coverPath + "/" + name + ".jpg";
+        const fileStream = fs.createWriteStream(localPath);
+        response.pipe(fileStream);
+        fileStream.on("finish", () => {
+          that.setLog(`🟢 封面下载成功 <br/>`);
+          fileStream.close();
+          function getHoverCoverImg(index) {
+            const urlVideo = host + `${id}/preview.mp4`;
+            https.get(urlVideo, (response2) => {
+              const localPath2 = previewPath + "/" + name + ".mp4";
+              const fileStream2 = fs.createWriteStream(localPath2);
+              response2.pipe(fileStream2);
+              fileStream2.on("finish", () => {
+                that.setLog(`🟢 预览视频下载成功 <br/>`);
+                fileStream2.close();
+                resolve(true);
+              });
+            }).on("error", (error) => {
+              getHoverCoverImg();
+              that.setLog(`🔴 (即将重试)下载出错: ${error} <br/>`);
+            });
+          }
+          getHoverCoverImg();
+        });
+      }).on("error", (error) => {
+        this.getPreviewVideo(id, name, ++getCoverIndex, previewPath, coverPath);
+        that.setLog(`🔴 (即将重试)下载出错: ${error} <br/>`);
+      });
+    });
   }
 }
 function getHeaders(resource) {
@@ -1477,45 +1549,6 @@ function splitArrayIntoEqualChunks(array, numberOfChunks) {
   }
   return result;
 }
-function getPreviewVideo(id, name, getCoverIndex, previewPath, coverPath) {
-  return new Promise((resolve, reject) => {
-    const host = "https://eightcha.com/";
-    id = id.toLowerCase();
-    let getHoverCoverIndex = 0;
-    if (getCoverIndex >= 5 || getHoverCoverIndex >= 5)
-      return;
-    const url2 = host + `${id}/cover.jpg?class=normal`;
-    https.get(url2, (response) => {
-      const localPath = coverPath + "/" + name + ".jpg";
-      const fileStream = fs.createWriteStream(localPath);
-      response.pipe(fileStream);
-      fileStream.on("finish", () => {
-        console.log("图片下载成功");
-        fileStream.close();
-        function getHoverCoverImg(index) {
-          const urlVideo = host + `${id}/preview.mp4`;
-          https.get(urlVideo, (response2) => {
-            const localPath2 = previewPath + "/" + name + ".mp4";
-            const fileStream2 = fs.createWriteStream(localPath2);
-            response2.pipe(fileStream2);
-            fileStream2.on("finish", () => {
-              console.log("预告片下载成功");
-              fileStream2.close();
-              resolve(true);
-            });
-          }).on("error", (error) => {
-            getHoverCoverImg();
-            console.error("(即将重试)下载出错:", error);
-          });
-        }
-        getHoverCoverImg();
-      });
-    }).on("error", (error) => {
-      getPreviewVideo(id, name, ++getCoverIndex, previewPath, coverPath);
-      console.error("(即将重试,如果还是不行,就可能是来源有问题https://missav.com/查看图片路径)下载出错:", error);
-    });
-  });
-}
 function sanitizeVideoName(name) {
   return name.replace("[无码破解]", "").replaceAll(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, "").replaceAll(/[\·\・\●\/]/g, "").replaceAll(" ", "");
 }
@@ -1528,6 +1561,10 @@ async function processM3u8(url2, headers, docPath, app) {
     myParser.push(m3u8Data);
     myParser.end();
     let dataArr = myParser.manifest.segments;
+    dataArr = dataArr.filter((item) => {
+      const filePath = path$1.join(docPath, videoName, item.uri);
+      return !fs.existsSync(filePath);
+    });
     return { videoName, urlPrefix, dataArr };
   } catch (e) {
     console.error("处理M3U8文件出错:", e.message);

@@ -96,7 +96,6 @@ async function onSubmit() {
     downloadHistory.value.unshift({ ...sizeForm.value });
     appStoreData("downloadHistory", downloadHistory.value);
   }
-  await getSystemLog();
   timer = setInterval(async () => {
     storeData.value = await el.onGetDownloadProgress(name);
     const { downLoadAfter: after, downloadCount: count } = storeData.value;
@@ -106,7 +105,7 @@ async function onSubmit() {
       downLoadAfterCopy[after] += 1;
     }
     //如果下载不动 时间超过60秒，则重新开始下载
-    if (downLoadAfterCopy[after] > 30) {
+    if (downLoadAfterCopy[after] > 15) {
       ElNotification({
         title: "下载提示：",
         message: "下载异常，已停止下载",
@@ -126,17 +125,14 @@ async function onSubmit() {
 
     // 判断是否下载完成
     if (after == count || downLoadAfterCopy.length === 0) {
-      ElNotification({
-        title: "下载提示：",
-        message: "下载完成正在合并视频",
-        type: "success",
-      });
       timer && clearInterval(timer);
       logData.logTimer && clearInterval(logData.logTimer);
       //视频下载完成后，将视频进行合并
-      await el.onMergeVideo({ name });
+      await onMergeVideo();
       counter.value = 0;
       isStartDown.value = false;
+      getDownloadListContent();
+      updateSpeedDownload();
     }
   }, 1000);
   try {
@@ -152,7 +148,6 @@ async function onSubmit() {
     ElNotification({
       title: "下载提示：",
       message: res + ":" + name + "等待10秒后开始下载下一个任务",
-      position: "bottom-left",
       duration: 10000,
     });
 
@@ -205,12 +200,6 @@ async function onMergeVideo() {
   const { name } = sizeForm.value;
   const msg = await el.onMergeVideo({
     name,
-  });
-  ElNotification({
-    title: "下载提示：",
-    message: msg,
-    position: "bottom-left",
-    duration: 0,
   });
 }
 function formatFileSize(fileSize: any) {
@@ -295,10 +284,15 @@ const logData = reactive({
   isOnScroll: true, //是否自动滚动
 });
 const getSystemLog = async () => {
-  await el.onClearSystemLog();
+  // await el.onClearSystemLog();
   logData.logTimer && clearInterval(logData.logTimer);
   logData.logTimer = setInterval(async () => {
-    logData.value = await el.onGetSystemLog();
+    const res = await el.onGetSystemLog();
+    logData.value = res.split("<br/>");
+    //如果日志内容超过100条，则只显示最新的100条
+    if (logData.value.length > 100) {
+      logData.value = logData.value.slice(logData.value.length - 100);
+    }
     //如果自动滚动条开启，则将滚动条滚动到最底部
     if (!logData.isOnScroll) return;
     //将滚动条滚动到最底部
@@ -306,6 +300,7 @@ const getSystemLog = async () => {
     systemLog.scrollTop = systemLog.scrollHeight;
   }, 500);
 };
+await getSystemLog();
 </script>
 <template>
   <div class="addWhole">
@@ -347,12 +342,21 @@ const getSystemLog = async () => {
         ></LzyBtn>
       </li>
       <div class="systemLog">
-        <div v-html="logData.value"></div>
-        <LzyBtn
-          icon="fluent:send-logging-24-filled"
-          :title="(logData.isOnScroll ? '关闭' : '开启') + '系统日志滚动'"
-          @click="logData.isOnScroll = !logData.isOnScroll"
-        ></LzyBtn>
+        <div>
+          <p v-for="(item, index) in logData.value" :key="index">{{ item }}</p>
+        </div>
+        <section>
+          <LzyBtn
+            icon="icon-park:file-code"
+            :title="(logData.isOnScroll ? '关闭' : '开启') + '日志滚动'"
+            @click="logData.isOnScroll = !logData.isOnScroll"
+          ></LzyBtn>
+          <LzyBtn
+            icon="icon-park:clear"
+            title="清空日志"
+            @click="el.onClearSystemLog()"
+          ></LzyBtn>
+        </section>
       </div>
     </ul>
     <div class="addMain">
@@ -386,7 +390,7 @@ const getSystemLog = async () => {
           />
         </el-form-item>
         <el-form-item label="下载线程">
-          <el-input v-model="sizeForm.thread" type="number" max="20" min="1" />
+          <el-input v-model="sizeForm.thread" type="number" max="50" min="1" />
         </el-form-item>
         <el-form-item class="sumbit">
           <!-- v-show="speedDownload" -->
@@ -540,11 +544,20 @@ ul {
     gap: 5px;
     width: 100%;
     & > div {
-      overflow-y: auto;
+      overflow: auto;
       height: 200px;
       border: 2px solid var(--themeColor);
       border-radius: 10px;
       font-size: 12px;
+      p {
+        margin: 0;
+        text-wrap: nowrap;
+      }
+    }
+    & > section {
+      display: grid;
+      gap: 10px;
+      grid-template-columns: 1fr 1fr;
     }
   }
 }

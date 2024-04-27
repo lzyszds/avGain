@@ -12,7 +12,7 @@ const { exec } = require('child_process');
   headers:请求头
   path:保存文件夹路径
 */
-function getVideo(urlData, i, urlPrefix, headers, path, docPath) {
+function getVideo(urlData, i, index, urlPrefix, headers, path, docPath) {
   if (!urlData[i]) return '没有视频了'
   const source = urlData[i].uri.indexOf('video') === 0 ? 'av' : 'super';
   let match
@@ -24,19 +24,26 @@ function getVideo(urlData, i, urlPrefix, headers, path, docPath) {
 
   //如果当前视频节点已经下载完成，就跳过  
   if (fs.existsSync(`${path}/${match[1]}.ts`)) {
-    return getVideo(urlData, ++i, urlPrefix, headers, path, docPath);
+    return getVideo(urlData, ++i, index, urlPrefix, headers, path, docPath);
   }
 
   return new Promise(async (resolve, reject) => {
     let res
     try {
-      res = await requestWithRetryLocal(urlPrefix + urlData[i].uri, headers, path, docPath, match[1])
+      res = await requestWithRetryLocal(
+        urlPrefix + urlData[i].uri,
+        headers,
+        path,
+        docPath,
+        match[1],
+        index
+      )
     } catch (e) {
-      console.log(e);
+      handleLog.set(`🔴 ${e} <br/>`, docPath + '\\log.txt')
     }
 
     if (!res) {
-      return await getVideo(urlData, ++i, urlPrefix, headers, path, docPath);
+      return await getVideo(urlData, ++i, index, urlPrefix, headers, path, docPath);
     }
     // 获取文件夹的存储大小
     // 将视频流生成二进制数据
@@ -48,10 +55,11 @@ function getVideo(urlData, i, urlPrefix, headers, path, docPath) {
     fs.appendFile(`${path}/${match[1]}.ts`, buffer, async (err) => {
       if (err) {
         reject(err); // 将错误传递给 Promise 的拒绝处理
+        handleLog.set(`🔴 ${err} <br/>`, docPath + '\\log.txt')
         return;
       }
       if (i < urlData.length) {
-        await getVideo(urlData, ++i, urlPrefix, headers, path, docPath);
+        await getVideo(urlData, ++i, index, urlPrefix, headers, path, docPath);
       } else { // 提示用户下载完成
         resolve('下载完成')
       }
@@ -73,13 +81,13 @@ const requestWithRetry = (url, headers, path) => {
 
 
 
-const requestWithRetryLocal = async (url, headers, path, docPath, name) => {
+const requestWithRetryLocal = async (url, headers, path, docPath, name, index) => {
   let retryCount = 3
   while (retryCount--) {
     if (retryCount != 2) {
-      handleLog.set(`正在下载：${name} 超时重试第 ${3 - retryCount} 次 <br/>`, docPath + '/log.txt')
+      handleLog.set(`🔴 正在下载：${name} 超时重试第 ${3 - retryCount} 次 <br/>`, docPath + '/log.txt')
     } else {
-      handleLog.set(`正在下载：${name} <br/>`, docPath + '/log.txt')
+      handleLog.set(`🟢 正在下载：${name} ${index}线程 <br/>`, docPath + '/log.txt')
     }
 
     try {
@@ -87,7 +95,7 @@ const requestWithRetryLocal = async (url, headers, path, docPath, name) => {
         .get(url + `?t=${new Date().getTime()}`)
         .set(headers)
         .timeout({
-          response: 1000 * 10,  //等待服务器响应的时间
+          response: 1000 * 5,  //等待服务器响应的时间
         })
         .responseType('buffer');
       return res.body;
@@ -109,11 +117,9 @@ function aria2cDownload(url, headers, outputPath) {
   return new Promise((resolve, reject) => {
     exec(`curl -L -o ${outputPath}/${name}.ts ${headers} ${url}`, (error, stdout, stderr) => {
       if (error) {
-        console.log(`lzy  error:`, error)
         reject(error);
       }
       if (stderr) {
-        console.log(`lzy  stderr:`, stderr)
         //弹出错误信息
         reject(stderr);
       }

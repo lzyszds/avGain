@@ -29,7 +29,9 @@ export class WindowManager {
     downloadPath: string
   };
   private workerArr: Worker[];
-  private downloadPlanArr: any;
+  private docPath: string;
+  private setLog: (msg: string) => void
+  private taskArray: number[] = []
 
   /**
    * Creates an instance of WindowManager.
@@ -49,8 +51,10 @@ export class WindowManager {
       videoPath: '',
       downloadPath: ''
     }
-    //下载计划数组
-    this.downloadPlanArr = []
+    //文档路径
+    this.docPath = path.join(this.app.getPath('documents'), 'javPlayer')
+
+    this.setLog = (msg: string) => handleLog.set(msg, this.docPath + '\\log.txt')
     // 注册事件监听
     this.registerHandleWin();//窗口操作
     this.registerHandleOpenDir()//获取文件夹路径
@@ -173,19 +177,15 @@ export class WindowManager {
   private async onHandleStoreData(event: Electron.IpcMainInvokeEvent, arg: object | string) {
     let data = arg, newdata
 
-    const storePath = path.join(this.app.getPath('documents'), 'javPlayer')
+    const storeFilePath = path.join(this.docPath, 'storeLog.json')
+    const storeFile = fs.readFileSync(storeFilePath, 'utf-8')
     //如果是获取数据
     if (typeof data === 'string') {
-      const storeFilePath = path.join(storePath, 'storeLog.json')
-      const storeFile = fs.readFileSync(storeFilePath, 'utf-8')
       if (!storeFile) return null
       const json = JSON.parse(storeFile)
       return json[data]
     } else {
       //如果是存储数据
-      // mkdirsSync(storePath)
-      const storeFilePath = path.join(storePath, 'storeLog.json')
-      const storeFile = fs.readFileSync(storeFilePath, 'utf-8')
       if (storeFile) {
         const storeData = JSON.parse(storeFile)
         newdata = Object.assign(storeData, data)
@@ -209,9 +209,12 @@ export class WindowManager {
       starArr
     } = this.onGetAllDirPath(event, 'all')
 
+    const that = this
+
     //获取视频列表 解决有些视频没有封面的问题
     const existArr = fs.readdirSync(videoPath)
     const coverList = fs.readdirSync(coverPath).map((file: any) => {
+
       if (!file.startsWith('.') && file.indexOf('Thumbs') == 0) return null
       if (file.indexOf('.png') == -1) {
         const name = file.split('.jpg')[0]
@@ -247,12 +250,13 @@ export class WindowManager {
         return null
       }
     }).filter((item) => item !== null);
+
     //将没有封面的视频封面进行下载
     existArr.forEach((item: any) => {
       const videoId = getVideoId(item)
       if (videoId) {
         const name = item.split('.mp4')[0]
-        getPreviewVideo(videoId, name, 0, previewPath, coverPath)
+        that.getPreviewVideo(videoId, name, 0, previewPath, coverPath)
       }
     })
     const videoListData = quickSortByTimestamp(coverList.filter((res) => res), 'stampTime', false)
@@ -270,7 +274,6 @@ export class WindowManager {
     return new Promise(async (resolve, reject) => {
       // 设置应用和文档路径。
       const appPath = path.join(__dirname, `../../electron`);
-      const docPath = path.join(this.app.getPath('documents'), 'javPlayer');
 
       // 解构从前端进程传入的参数。
       let { resource, name, url, thread, downPath, previewPath, coverPath, videoPath } = arg;
@@ -287,7 +290,7 @@ export class WindowManager {
 
 
       // 从M3U8 URL计算出需要下载的视频文件信息。
-      const { urlPrefix, dataArr } = await processM3u8(url, headers, docPath, this.app);
+      const { urlPrefix, dataArr } = await processM3u8(url, headers, this.docPath, this.app);
 
       //将视频数量存入store中
       storeData(this.app, {
@@ -296,14 +299,12 @@ export class WindowManager {
 
       // 检验SSL证书。
       if (dataArr.length === 0) {
-        console.log('无法验证第一个证书');
+        this.setLog('🔴 无法验证第一个证书 <br/>');
         return resolve('无法验证第一个证书');
       }
       // 将M3U8数据分割为等份，按线程数分配。
       const countArr = splitArrayIntoEqualChunks(dataArr, thread);
 
-      // 设置下载计划数组。
-      that.downloadPlanArr = countArr;
 
       // 为不同的下载线程初始化Worker线程。
       for (let i = 0; i < thread; i++) {
@@ -316,7 +317,7 @@ export class WindowManager {
           headers: headers,
           urlPrefix: urlPrefix,
           downPath: downPath,
-          docPath: docPath
+          docPath: that.docPath
         });
         that.workerArr.push(separateThread);
       }
@@ -329,10 +330,12 @@ export class WindowManager {
 
   //暂停下载
   private onPauseDownloadEvent(event: Electron.IpcMainInvokeEvent, arg: any) {
-    console.log(`lzy  this.workerArr:`, this.workerArr)
     this.workerArr.forEach((worker) => {
       worker.terminate()
     })
+
+    //发送日志提醒
+    this.setLog("🟡 下载任务已暂停<br/>")
   }
   private registerPauseDownloadEvent(): void {
     ipcMain.handle('pauseDownloadEvent', this.onPauseDownloadEvent.bind(this));
@@ -371,9 +374,9 @@ export class WindowManager {
             fs.unlinkSync(arg + '/' + file)
           }
         })
-        return '删除成功'
+        return this.setLog('🟡 清空文件夹成功 <br/>')
       } catch (e: any) {
-        return '删除失败'
+        return this.setLog(`🔴 清空文件夹失败 ${e} <br/>`)
       }
     }
   }
@@ -397,14 +400,16 @@ export class WindowManager {
   private onHandleDeleteFile(event: Electron.IpcMainInvokeEvent, arg: any) {
     const name = arg.split('/')[1].split('.mp4')[0]
 
+    const setLog = this.setLog
+
     const { videoPath, previewPath, coverPath } = this.pathJson
     fs.access(`${videoPath}/${name}.mp4`, (err) => {
-      if (err) return console.log('文件不存在')
+      if (err) return setLog('🔴 文件不存在 <br/>')
       try {
         fs.unlinkSync(`${videoPath}/${name}.mp4`)
       } catch (e: any) {
         //如果删除文件失败(文件占用)，就等待2分钟后再次删除
-        if (e) console.log('删除文件失败', e.message)
+        if (e) setLog('🔴 文件占用，等待2分钟后再次删除 <br/>')
         setTimeout(() => {
           fs.unlinkSync(`${videoPath}/${name}.mp4`)
         }, 500)
@@ -412,11 +417,11 @@ export class WindowManager {
     })
 
     fs.access(`${previewPath}/${name}.mp4`, (err) => {
-      if (err) return console.log('文件不存在')
+      if (err) return setLog('🔴 文件不存在 <br/>')
       fs.unlinkSync(`${previewPath}/${name}.mp4`)
     })
     fs.access(`${coverPath}/${name}.jpg`, (err) => {
-      if (err) return console.log('文件不存在')
+      if (err) return setLog('🔴 文件不存在 <br/>')
       fs.unlinkSync(`${coverPath}/${name}.jpg`)
     })
 
@@ -429,6 +434,7 @@ export class WindowManager {
 
   //合并视频的逻辑
   private async onMergeVideo(event: Electron.IpcMainInvokeEvent, arg: any) {
+    this.setLog(`🟢 开始合并视频 <br/>`)
     let getCoverIndex = 0 //第几次尝试下载图片的索引
     const { previewPath, coverPath, downloadPath, videoPath } = this.pathJson
     let { name } = arg
@@ -436,17 +442,22 @@ export class WindowManager {
     name = sanitizeVideoName(name)
     //截取番号出来
     const designation = getVideoId(name)
-    if (!designation) return '番号不正确'
+    if (!designation) return this.setLog(`🔴 未找到番号 <br/>`)
 
     //判断当前视频是否存在
     const existArr = fs.existsSync(videoPath + '/' + name + '.mp4')
-    if (existArr) return '视频已经存在，无需合并'
+    if (existArr) return this.setLog(`🟢 视频已存在 无需进行合并 <br/>`)
 
     const resulted = await merge(name, downloadPath + `/${designation}`, videoPath)
     if (resulted === '合成成功') {
       // 如果所有线程完成下载，尝试合并视频片段。
-      await getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath)
-      await fs.rmSync(downloadPath + `/${designation}`, { recursive: true })
+      await this.getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath)
+      //删除下载的视频片段
+      fs.rm(downloadPath + `/${designation}`, { recursive: true }, (err) => {
+        if (err) return this.setLog(`🔴 分段视频删除失败:${err} <br/>`)
+        this.setLog(`🟢 视频合并成功,分段视频已删除 <br/>`)
+      })
+
       // 完成下载任务，返回结果。
       return name
     } else {
@@ -469,8 +480,7 @@ export class WindowManager {
 
   //收藏视频
   private onHandleStarVideo(event: Electron.IpcMainInvokeEvent, arg: any) {
-    const storePath = path.join(this.app.getPath('documents'), 'javPlayer')
-    const storeFilePath = path.join(storePath, 'storeLog.json')
+    const storeFilePath = path.join(this.docPath, 'storeLog.json')
     const storeFile = fs.readFileSync(storeFilePath, 'utf-8')
     const storeData = JSON.parse(storeFile)
     let starArr = storeData.starArr
@@ -500,8 +510,7 @@ export class WindowManager {
 
   //获取当前所有的文件夹配置路径
   private onGetAllDirPath(event: Electron.IpcMainInvokeEvent, arg: any) {
-    const storePath = path.join(this.app.getPath('documents'), 'javPlayer')
-    const storeFilePath = path.join(storePath, 'storeLog.json')
+    const storeFilePath = path.join(this.docPath, 'storeLog.json')
     const storeFile = fs.readFileSync(storeFilePath, 'utf-8')
     //如果没有存储文件数据，则创建一个空的存储文件
     if (!storeFile) {
@@ -551,13 +560,12 @@ export class WindowManager {
 
   //获取系统日志
   private onGetSystemLog(event: Electron.IpcMainInvokeEvent, arg: any) {
-    const storePath = path.join(this.app.getPath('documents'), 'javPlayer')
-    const logFilePath = path.join(storePath, 'log.txt')
+    const logFilePath = path.join(this.docPath, 'log.txt')
     try {
       const logFile = handleLog.get(logFilePath)
       return logFile
     } catch (e) {
-      return '暂无日志'
+      return `🔴 获取日志失败 <br/>`
     }
   }
   private registerGetSystemLog(): void {
@@ -566,17 +574,62 @@ export class WindowManager {
 
   //清空系统日志
   private onClearSystemLog(event: Electron.IpcMainInvokeEvent, arg: any) {
-    const storePath = path.join(this.app.getPath('documents'), 'javPlayer')
-    const logFilePath = path.join(storePath, 'log.txt')
+    const logFilePath = path.join(this.docPath, 'log.txt')
     try {
       handleLog.clear(logFilePath)
-      return '清空成功'
+      return this.setLog(`🟡 清空日志成功 <br/>`)
     } catch (e) {
-      return '清空失败'
+      return this.setLog(`🔴 清空日志失败 <br/>`)
     }
   }
   private registerClearSystemLog(): void {
     ipcMain.handle('onClearSystemLog', this.onClearSystemLog.bind(this));
+  }
+
+
+  getPreviewVideo(id: string, name: string, getCoverIndex: number, previewPath: string, coverPath: string) {
+    return new Promise<Boolean>((resolve, reject) => {
+      const host = 'https://eightcha.com/'
+
+      const that = this
+      //将id转换为小写
+      id = id.toLowerCase()
+      let getHoverCoverIndex = 0 //第几次尝试下载hover图片的索引
+      if (getCoverIndex >= 5 || getHoverCoverIndex >= 5) return
+      /* 获取图片，图片来自missav.com中，因为这个网站没做拦截 */
+      const url = host + `${id}/cover.jpg?class=normal`
+      https.get(url, (response) => {
+        const localPath = coverPath + '/' + name + '.jpg'
+        const fileStream = fs.createWriteStream(localPath);
+        response.pipe(fileStream);
+        fileStream.on('finish', () => {
+          that.setLog(`🟢 封面下载成功 <br/>`)
+          fileStream.close();
+          //下载第二张封面。hover中的封面
+          function getHoverCoverImg(index: number) {
+            const urlVideo = host + `${id}/preview.mp4`
+            https.get(urlVideo, (response) => {
+              const localPath = previewPath + '/' + name + '.mp4'
+              const fileStream = fs.createWriteStream(localPath);
+              response.pipe(fileStream);
+              fileStream.on('finish', () => {
+                that.setLog(`🟢 预览视频下载成功 <br/>`)
+                fileStream.close();
+                resolve(true)
+              });
+            }).on('error', (error) => {
+              getHoverCoverImg(++index)
+              that.setLog(`🔴 (即将重试)下载出错: ${error} <br/>`)
+            });
+          }
+          getHoverCoverImg(getHoverCoverIndex)
+        });
+      }).on('error', (error) => {
+        this.getPreviewVideo(id, name, ++getCoverIndex, previewPath, coverPath)
+        that.setLog(`🔴 (即将重试)下载出错: ${error} <br/>`)
+      });
+    })
+
   }
 }
 
@@ -630,49 +683,7 @@ function sleep(timer: number) {
     }, timer)
   })
 }
-function getPreviewVideo(id: string, name: string, getCoverIndex: number, previewPath: string, coverPath: string) {
-  return new Promise<Boolean>((resolve, reject) => {
-    const host = 'https://eightcha.com/'
 
-    //将id转换为小写
-    id = id.toLowerCase()
-    let getHoverCoverIndex = 0 //第几次尝试下载hover图片的索引
-    if (getCoverIndex >= 5 || getHoverCoverIndex >= 5) return
-    /* 获取图片，图片来自missav.com中，因为这个网站没做拦截 */
-    const url = host + `${id}/cover.jpg?class=normal`
-    https.get(url, (response) => {
-      const localPath = coverPath + '/' + name + '.jpg'
-      const fileStream = fs.createWriteStream(localPath);
-      response.pipe(fileStream);
-      fileStream.on('finish', () => {
-        console.log('图片下载成功');
-        fileStream.close();
-        //下载第二张封面。hover中的封面
-        function getHoverCoverImg(index: number) {
-          const urlVideo = host + `${id}/preview.mp4`
-          https.get(urlVideo, (response) => {
-            const localPath = previewPath + '/' + name + '.mp4'
-            const fileStream = fs.createWriteStream(localPath);
-            response.pipe(fileStream);
-            fileStream.on('finish', () => {
-              console.log('预告片下载成功');
-              fileStream.close();
-              resolve(true)
-            });
-          }).on('error', (error) => {
-            getHoverCoverImg(++index)
-            console.error('(即将重试)下载出错:', error);
-          });
-        }
-        getHoverCoverImg(getHoverCoverIndex)
-      });
-    }).on('error', (error) => {
-      getPreviewVideo(id, name, ++getCoverIndex, previewPath, coverPath)
-      console.error('(即将重试,如果还是不行,就可能是来源有问题https://missav.com/查看图片路径)下载出错:', error);
-    });
-  })
-
-}
 
 
 
@@ -702,6 +713,11 @@ async function processM3u8(url, headers, docPath, app) {
     myParser.end();
     // 要获取数据，
     let dataArr = myParser.manifest.segments
+    //清除掉已经下载过的文件
+    dataArr = dataArr.filter((item) => {
+      const filePath = path.join(docPath, videoName, item.uri);
+      return !fs.existsSync(filePath);
+    });
 
     return { videoName, urlPrefix, dataArr };
   } catch (e: any) {

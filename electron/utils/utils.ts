@@ -293,11 +293,8 @@ export async function downloadM3U8(url, headers, outputPath, app): Promise<strin
         //返回时间最大的文件
         const fileInfo = quickSortByTimestamp(fileInfos, 'time', false)[0]
         const res = fs.readFileSync(outputPath + "\\data\\" + fileInfo.name, "utf-8")
-        //提示用户下载完成m3u8文件
-        new Notification({
-          title: '下载完成',
-          body: 'm3u8文件下载完成，准备开始下载视频'
-        }).show()
+        //通过日志提醒用户下载完成m3u8文件
+        handleLog.set("📋 m3u8文件下载完成，准备开始下载视频 <br/>", outputPath + '\\log.txt')
         resolve(res)
       }
     });
@@ -309,7 +306,11 @@ export async function downloadM3U8(url, headers, outputPath, app): Promise<strin
 export function aria2cDownload(url, headers, outputPath) {
   headers = '--header="Accept: */*" --header="accept-language: zh-CN,zh;q=0.9,en;q=0.8" --header="Referer: https://emturbovid.com/" --header="Referrer-Policy: strict-origin-when-cross-origin"'
   return new Promise((resolve, reject) => {
-    exec(`aria2c -d ${outputPath} ${headers} ${url}`, (error, stdout, stderr) => {
+    let o = ''
+    if (/video\.m3u8$/.test(url)) {
+      o = '-o ' + url.split('/')[3] + '.m3u8'
+    }
+    exec(`aria2c -d ${outputPath} ${o} ${headers} ${url}`, (error, stdout, stderr) => {
       if (error) {
         reject(error);
       }
@@ -326,11 +327,26 @@ export function aria2cDownload(url, headers, outputPath) {
 
 //设置系统日志功能
 export const handleLog = {
-  set: (text: string, path: string) => {
+  set: (text: string, path: string, isProgress: boolean = false) => {
     if (!fs.existsSync(path)) {
       fs.writeFileSync(path, text, 'utf-8')
     }
-    fs.appendFileSync(path, text + '\n')
+    if (isProgress) {
+      // 使用正则表达式匹配百分比
+      var regex = /(\🟢 合成成功 )(\d+)(%)/;
+      //先删除日志中最后一行
+      try {
+        var data = fs.readFileSync(path, 'utf-8');
+        var lines = data.split('<br/>');
+        lines = lines.filter(line => {
+          return !regex.test(line);
+        });
+        fs.writeFileSync(path, lines.join('<br/>'), 'utf-8');
+      } catch (err) {
+        console.log(err);
+      }
+    }
+    fs.appendFileSync(path, text + '<br/>')
   },
   get: (path) => {
     //如果文件不存在则创建

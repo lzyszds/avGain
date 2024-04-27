@@ -38,7 +38,6 @@ const validChannels = [
   //清空系统日志
   'onClearSystemLog'
 ]
-console.log(`lzy  validChannels:`, validChannels)
 
 const myElectron = {}
 validChannels.forEach((channel) => {
