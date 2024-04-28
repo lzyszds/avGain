@@ -11,7 +11,7 @@
     }
   },
   "scripts": {
-    "dev": "chcp 65001 && vite ",
+    "dev": "chcp 65001 && vite  --max-old  --max-old-space-size=4096 --no-warnings --no-deprecation --max-http-header-size=8192 --max-http-header-count=1000 --max-http-header-size=8192 --max-http-header-count=1000 --max-http-header-size=8192 --max-http-header-count=1000 --max-http-header-size=8192 --max-http-header-count=1000 --max-http-header-size=819",
     "clean": "tsc --build --clean",
     "create": "node createSeprate.js",
     "viteBuild": "vite build",

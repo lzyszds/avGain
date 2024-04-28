@@ -57,8 +57,8 @@ const isStartDown = ref(false);
 //历史记录当前页数
 const newPage = ref(1);
 
-let timer,
-  downLoadAfterCopy: number[] = [];
+let timer;
+
 //下载时间计时器
 const counter = ref(0);
 
@@ -67,6 +67,7 @@ const downloadTime = computed(() => {
 });
 
 async function onSubmit() {
+  let downLoadAfterCopy: number[] = [];
   isStartDown.value = !isStartDown.value;
   if (!isStartDown.value) {
     timer && clearInterval(timer);
@@ -111,7 +112,6 @@ async function onSubmit() {
         message: "下载异常，已停止下载",
         type: "error",
       });
-      downLoadAfterCopy = [];
       isStartDown.value = false;
       timer && clearInterval(timer);
       //重新开始下载
