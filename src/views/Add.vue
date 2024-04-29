@@ -81,6 +81,7 @@ async function onSubmit() {
   timer && clearInterval(timer);
   const { name, url } = sizeForm.value;
   if (!name || !url) return;
+
   ElNotification({
     title: "下载提示：",
     message: "开始下载：" + name,
@@ -138,42 +139,31 @@ async function onSubmit() {
     }
   }, 1000);
   try {
-    // 使用 await 处理 promise
-    const res = await el.downloadVideoEvent({
+    //开始下载任务
+    await el.downloadVideoEvent({
       ...sizeForm.value,
       downPath,
       previewPath,
       coverPath,
       videoPath,
     });
-
-    ElNotification({
-      title: "下载提示：",
-      message: res + ":" + name + "等待10秒后开始下载下一个任务",
-      duration: 10000,
-    });
-
-    setTimeout(() => {
-      // 将备选内容第一个赋值给sizeForm 并删除备选内容 然后开始下载下一个
-      if (alternateArr.value.length > 0) {
-        sizeForm.value.name = alternateArr.value[0].name;
-        sizeForm.value.url = alternateArr.value[0].url;
-        alternateArr.value.splice(0, 1);
-
-        const timerItem = setInterval(() => {
-          if (getDownloadSize() == "0.00B") {
-            clearInterval(timer);
-            onSubmit();
-            clearInterval(timerItem);
-          }
-        }, 1000);
-      }
-    }, 1000 * 10);
   } catch (err) {
     console.error(err);
   }
 }
 
+//下载完成后自动替换名字链接
+function onAutoReplaceTask() {
+  // 将备选内容第一个赋值给sizeForm 并删除备选内容 然后开始下载下一个
+  if (alternateArr.value.length > 0) {
+    sizeForm.value.name = alternateArr.value[0].name;
+    sizeForm.value.url = alternateArr.value[0].url;
+    alternateArr.value.splice(0, 1);
+    onSubmit();
+  }
+}
+
+//判断是否已经存在该名称
 function hasName(name) {
   let result = false;
   downloadHistory.value.forEach((res) => {
@@ -203,7 +193,10 @@ async function onMergeVideo() {
   const msg = await el.onMergeVideo({
     name,
   });
+  if (msg == name) {
+  }
 }
+//格式化文件大小
 function formatFileSize(fileSize: any) {
   const units = ["B", "KB", "MB", "GB", "TB"];
   let index = 0;
@@ -296,11 +289,12 @@ const getSystemLog = async () => {
     if (logData.value.length > 100) {
       logData.value = logData.value.slice(logData.value.length - 100);
     }
-    console.log(`lzy  logData.isOnScroll:`, logData.isOnScroll);
     //如果自动滚动条开启，则将滚动条滚动到最底部
     if (!logData.isOnScroll) return;
     //将滚动条滚动到最底部
-    systemLog.scrollTop = systemLog.scrollHeight;
+    try {
+      systemLog.scrollTop = systemLog.scrollHeight;
+    } catch (e) {}
   }, 500);
 };
 await getSystemLog();

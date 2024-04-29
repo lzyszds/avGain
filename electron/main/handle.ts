@@ -439,19 +439,19 @@ export class WindowManager {
     const { previewPath, coverPath, downloadPath, videoPath } = this.pathJson
     let { name } = arg
     //替换名字非法字符 保留日语和中文字符，并删除其他非字母数字字符
-    name = sanitizeVideoName(name)
+    const newname = sanitizeVideoName(name)
     //截取番号出来
-    const designation = getVideoId(name)
+    const designation = getVideoId(newname)
     if (!designation) return this.setLog(`🔴 未找到番号 <br/>`)
 
     //判断当前视频是否存在
-    const existArr = fs.existsSync(videoPath + '/' + name + '.mp4')
+    const existArr = fs.existsSync(videoPath + '/' + newname + '.mp4')
     if (existArr) return this.setLog(`🟢 视频已存在 无需进行合并 <br/>`)
 
-    const resulted = await merge(name, downloadPath + `/${designation}`, videoPath)
+    const resulted = await merge(newname, downloadPath + `/${designation}`, videoPath)
     if (resulted === '合成成功') {
       // 如果所有线程完成下载，尝试合并视频片段。
-      await this.getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath)
+      await this.getPreviewVideo(designation, newname, getCoverIndex, previewPath, coverPath)
       //删除下载的视频片段
       fs.rm(downloadPath + `/${designation}`, { recursive: true }, (err) => {
         if (err) return this.setLog(`🔴 分段视频删除失败:${err} <br/>`)

@@ -1354,16 +1354,16 @@ class WindowManager {
     let getCoverIndex = 0;
     const { previewPath, coverPath, downloadPath, videoPath } = this.pathJson;
     let { name } = arg;
-    name = sanitizeVideoName(name);
-    const designation = getVideoId(name);
+    const newname = sanitizeVideoName(name);
+    const designation = getVideoId(newname);
     if (!designation)
       return this.setLog(`🔴 未找到番号 <br/>`);
-    const existArr = fs.existsSync(videoPath + "/" + name + ".mp4");
+    const existArr = fs.existsSync(videoPath + "/" + newname + ".mp4");
     if (existArr)
       return this.setLog(`🟢 视频已存在 无需进行合并 <br/>`);
-    const resulted = await merge(name, downloadPath + `/${designation}`, videoPath);
+    const resulted = await merge(newname, downloadPath + `/${designation}`, videoPath);
     if (resulted === "合成成功") {
-      await this.getPreviewVideo(designation, name, getCoverIndex, previewPath, coverPath);
+      await this.getPreviewVideo(designation, newname, getCoverIndex, previewPath, coverPath);
       fs.rm(downloadPath + `/${designation}`, { recursive: true }, (err) => {
         if (err)
           return this.setLog(`🔴 分段视频删除失败:${err} <br/>`);

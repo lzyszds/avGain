@@ -1,7 +1,7 @@
 {
   "name": "AvGain",
   "private": true,
-  "version": "1.2.1",
+  "version": "1.2.2",
   "main": "dist-electron/main/index.js",
   "description": "av爬取软件",
   "author": "lzyszds",
@@ -11,7 +11,7 @@
     }
   },
   "scripts": {
-    "dev": "chcp 65001 && vite  --max-old  --max-old-space-size=4096 --no-warnings --no-deprecation --max-http-header-size=8192 --max-http-header-count=1000 --max-http-header-size=8192 --max-http-header-count=1000 --max-http-header-size=8192 --max-http-header-count=1000 --max-http-header-size=8192 --max-http-header-count=1000 --max-http-header-size=819",
+    "dev": "chcp 65001 && vite",
     "clean": "tsc --build --clean",
     "create": "node createSeprate.js",
     "viteBuild": "vite build",

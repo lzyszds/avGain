@@ -49,7 +49,6 @@ contextBridge.exposeInMainWorld('myElectron', myElectron)
 
 ipcRenderer.on('download-progress', (event, progress) => {
   console.log(`lzy  progress:`, progress)
-
 });
 
 
