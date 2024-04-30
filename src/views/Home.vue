@@ -124,7 +124,6 @@ const toolHandle = [
 
 // 获取当前所有的文件夹配置路径 如果不存在则弹出设置弹窗
 const dirPathArr = await onGetAllDirPath();
-console.log(`lzy  dirPathArr:`, dirPathArr);
 if (!dirPathArr.coverPath) {
   setDialog.value = true;
 }

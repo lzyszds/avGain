@@ -26,10 +26,11 @@ const downloadHistory = ref(JSON.parse(rawData || "[]"));
 downloadHistory.value = downloadHistory.value.filter((res) => res.name);
 
 const sizeForm = useStorage("sizeForm", {
-  resource: "SuperJav",
-  name: "",
-  url: "",
-  thread: 10,
+  resource: "SuperJav", //来源
+  name: "", //视频名称
+  url: "", //m3u8链接
+  thread: 50, //下载进程数量
+  isAutoTask: true, //是否开启自动替换任务
 });
 
 //获取本地存储中的下载进度
@@ -133,8 +134,9 @@ async function onSubmit() {
       isStartDown.value = false;
 
       setTimeout(() => {
-        getDownloadListContent();
-        updateSpeedDownload();
+        getDownloadListContent(); //更新下载列表
+        updateSpeedDownload(); //更新下载速度
+        onAutoReplaceTask(); //判断是否开启自动替换任务
       }, 1000);
     }
   }, 1000);
@@ -155,7 +157,7 @@ async function onSubmit() {
 //下载完成后自动替换名字链接
 function onAutoReplaceTask() {
   // 将备选内容第一个赋值给sizeForm 并删除备选内容 然后开始下载下一个
-  if (alternateArr.value.length > 0) {
+  if (alternateArr.value.length > 0 && sizeForm.value.isAutoTask) {
     sizeForm.value.name = alternateArr.value[0].name;
     sizeForm.value.url = alternateArr.value[0].url;
     alternateArr.value.splice(0, 1);
@@ -386,8 +388,14 @@ await getSystemLog();
             spellcheck="false"
           />
         </el-form-item>
-        <el-form-item label="下载线程">
+        <el-form-item label="下载线程" class="downloadSet">
           <el-input v-model="sizeForm.thread" type="number" max="50" min="1" />
+          自动替换任务
+          <el-switch
+            v-model="sizeForm.isAutoTask"
+            active-text="是"
+            inactive-text="否"
+          />
         </el-form-item>
         <el-form-item class="sumbit">
           <!-- v-show="speedDownload" -->
@@ -397,30 +405,20 @@ await getSystemLog();
             <p>{{ storeData.downLoadAfter }}/{{ storeData.downloadCount }}</p>
             <p>{{ downloadTime }}</p>
           </div>
-
-          <button class="button download" @click="onSubmit" type="button">
-            <span class="button__text"
-              >{{ isStartDown ? "暂停" : "开始" }}下载</span
-            >
-            <span class="button__icon">
-              <svg
-                class="svg"
-                fill="none"
-                height="24"
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                stroke-width="2"
-                viewBox="0 0 24 24"
-                width="24"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <line x1="12" x2="12" y1="5" y2="19"></line>
-                <line x1="5" x2="19" y1="12" y2="12"></line>
-              </svg>
-            </span>
-          </button>
         </el-form-item>
+        <ElFormItem>
+          <button class="button download" @click="onSubmit" type="button">
+            <lzy-icon
+              :name="
+                isStartDown
+                  ? 'solar:play-circle-broken'
+                  : 'solar:download-square-broken'
+              "
+              style="font-weight: 600"
+            ></lzy-icon>
+            <span>{{ isStartDown ? "暂停" : "开始" }}下载</span>
+          </button>
+        </ElFormItem>
       </el-form>
       <el-button
         @click="addAlternate"
@@ -595,12 +593,22 @@ ul {
   .el-form {
     padding-top: 20px;
   }
+  .downloadSet :deep(.el-form-item__content) {
+    display: grid;
+    grid-template-columns: 100px 90px 100px;
+    gap: 10px;
+    font-family: "almama";
+    color: #000 !important;
+    span.is-text {
+      color: #22ffa3 !important;
+    }
+  }
 
   .sumbit :deep(.el-form-item__content) {
     justify-content: end;
     gap: 10px;
     display: grid;
-    grid-template-columns: 160px 1fr 80px 130px;
+    grid-template-columns: 160px 1fr 80px;
     span {
       text-align: center;
       color: #fff;
@@ -664,6 +672,7 @@ ul {
   }
 
   :deep(.el-form-item--large) {
+    margin-bottom: 10px;
     .el-form-item__label,
     span {
       font-family: "almama";
@@ -736,75 +745,69 @@ ul {
 }
 
 .download.button {
-  --main-focus: #2d8cf0;
-  --font-color: #323232;
-  --bg-color-sub: #dedede;
-  --bg-color: #eee;
-  --main-color: #323232;
-  position: relative;
-  width: 150px;
-  height: 40px;
-  cursor: pointer;
+  width: 100%;
   display: flex;
   align-items: center;
-  border: 2px solid var(--main-color);
-  box-shadow: 4px 4px var(--main-color);
-  background-color: var(--bg-color);
-  border-radius: 10px;
-  overflow: hidden;
-  transform: scale(0.7);
-
-  &,
-  .button__icon,
-  .button__text {
-    transition: all 0.3s;
+  gap: 5px;
+  font-size: 17px;
+  padding: 10px 20px;
+  color: white;
+  background: var(--themeColor);
+  border: none;
+  box-shadow: 0 0.17em 1px 1px rgba(59, 48, 78, 1);
+  letter-spacing: 0.05em;
+  border-radius: 8px;
+  position: relative;
+  justify-content: center;
+  transition: all 0.3s;
+  svg {
+    margin-right: 8px;
+    width: 25px;
   }
-
-  & .button__text {
-    transform: translateX(22px);
-    color: var(--font-color);
-    font-weight: 600;
-  }
-
-  & .button__icon {
-    position: absolute;
-    transform: translateX(100px);
-    height: 100%;
-    width: 40px;
-    background-color: var(--bg-color-sub);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  & .svg {
-    width: 20px;
-    fill: var(--main-color);
+  span {
+    color: #fff !important;
   }
 
   &:hover {
-    background: var(--bg-color);
-    padding: 0;
-  }
-
-  &:hover .button__text {
-    color: transparent;
-  }
-
-  &:hover .button__icon {
-    width: 148px;
-    transform: translateX(0);
+    box-shadow: 0 0.5em 1.5em -0.5em rgba(88, 71, 116, 0.627);
   }
 
   &:active {
-    transform: translate(3px, 3px);
-    box-shadow: 0px 0px var(--main-color);
+    box-shadow: 0 0.3em 1em -0.5em rgba(88, 71, 116, 0.627);
   }
-}
 
-.el-button,
-.button {
-  width: 100%;
-  font-family: "dindin";
+  &::before {
+    content: "";
+    width: 5px;
+    height: 40%;
+    background-color: white;
+    position: absolute;
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+    left: 0;
+    transition: all 0.2s;
+    box-shadow: 0 0.5em 1.5em -0.5em rgba(88, 71, 116, 0.627);
+  }
+
+  &::after {
+    content: "";
+    width: 5px;
+    height: 40%;
+    background-color: white;
+    position: absolute;
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+    right: 0;
+    transition: all 0.2s;
+    box-shadow: 0 0.5em 1.5em -0.5em rgba(88, 71, 116, 0.627);
+  }
+
+  &:hover {
+    &::before,
+    &::after {
+      height: 60%;
+      background-color: var(--hoverColor2);
+    }
+  }
 }
 </style>
