@@ -1,17 +1,17 @@
 <script setup lang="ts">
 import { ref, watch } from "vue";
-import { useRoute, useRouter } from 'vue-router'
-const webHeadTitle = ref(false)
-const hasWebHeadTitle = ref(false)
+import { useRoute, useRouter } from "vue-router";
+const webHeadTitle = ref(false);
+const hasWebHeadTitle = ref(false);
 
-const route = useRoute()
-const router = useRouter()
+const route = useRoute();
+const router = useRouter();
 const hasMaximize = ref<boolean>(false);
 //监听路由变化 从而改变pathActive 从而改变样式
 watch(
   () => route.path,
   (newVal) => {
-    hasWebHeadTitle.value = newVal == '/add'
+    hasWebHeadTitle.value = newVal == "/add";
   }
 );
 //最小化窗
@@ -28,31 +28,54 @@ const close = () => {
   window.myElectron.onHandleWin("close");
 };
 
+//打开开发者工具
+const openDevTools = () => {
+  window.myElectron.onHandleWin("openDev");
+};
+
 //鼠标进入顶部中心标题 事件返回顶部
 const tipBackfn = (val) => {
-  webHeadTitle.value = val
-}
+  webHeadTitle.value = val;
+};
 </script>
 
 <template>
   <!-- 顶部导航栏 -->
   <nav class="navbar">
-    <div class="logo " title="返回首页">
+    <div class="logo" title="返回首页">
       <img src="/public/logo.png" width="24" height="24" />
       <span class="title">AV Gain</span>
     </div>
-    <div v-if="hasWebHeadTitle" class="navbar-navTitle" @mouseover="tipBackfn(true)" @mouseout="tipBackfn(false)"
-      @click="() => router.push('/')">
+    <div
+      v-if="hasWebHeadTitle"
+      class="navbar-navTitle"
+      @mouseover="tipBackfn(true)"
+      @mouseout="tipBackfn(false)"
+      @click="() => router.push('/')"
+    >
       <h4 :class="webHeadTitle ? 'tipBackclass animate__jackInTheBox' : ''">
         返回首页
       </h4>
     </div>
     <div class="tool animate__wobble">
-      <button class="windHandleBtn hover:bg-[var(--setWindBtnColor)]" @click="minimize">
+      <button
+        class="windHandleBtn hover:bg-[var(--setWindBtnColor)]"
+        @click="openDevTools"
+      >
+        <LzyIcon name="flowbite:adjustments-vertical-outline"></LzyIcon>
+      </button>
+      <button
+        class="windHandleBtn hover:bg-[var(--setWindBtnColor)]"
+        @click="minimize"
+      >
         <LzyIcon name="system-uicons:minus"></LzyIcon>
       </button>
       <button class="windHandleBtn" @click="maximize">
-        <LzyIcon width="15px" height="15px" :name="hasMaximize ? 'mynaui:minimize' : 'mynaui:maximize'"></LzyIcon>
+        <LzyIcon
+          width="15px"
+          height="15px"
+          :name="hasMaximize ? 'mynaui:minimize' : 'mynaui:maximize'"
+        ></LzyIcon>
       </button>
       <button class="windHandleBtn" @click="close">
         <LzyIcon width="15px" height="15px" name="mynaui:x"></LzyIcon>
@@ -85,14 +108,13 @@ const tipBackfn = (val) => {
     font-size: 16px;
     font-weight: 300;
     color: var(--reverColor);
-    font-family: 'dindin';
+    font-family: "dindin";
   }
 }
 
 .navbar-navTitle {
-
   text-align: center;
-  transition: .3s;
+  transition: 0.3s;
   font-size: 16px;
   font-family: "dindin";
   color: #fff;
@@ -116,12 +138,10 @@ const tipBackfn = (val) => {
 
     &.tipBackclass {
       opacity: 1;
-      animation-duration: .5s;
+      animation-duration: 0.5s;
       animation-fill-mode: both;
     }
   }
-
-
 }
 
 .tool {
@@ -158,7 +178,6 @@ const tipBackfn = (val) => {
   background-color: var(--themeColor);
   border-radius: 5px;
 }
-
 
 @keyframes indistinct {
   0% {
@@ -199,4 +218,3 @@ const tipBackfn = (val) => {
   }
 }
 </style>
-

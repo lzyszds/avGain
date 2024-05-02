@@ -332,21 +332,26 @@ export const handleLog = {
       fs.writeFileSync(path, text, 'utf-8')
     }
     if (isProgress) {
-      // 使用正则表达式匹配百分比
+      // 定义用于匹配特定合成成功信息的正则表达式。
       var regex = /(\🟢 合成成功 )(\d+)(%)/;
-      //先删除日志中最后一行
       try {
+        // 读取指定路径的文件内容。
         var data = fs.readFileSync(path, 'utf-8');
+        // 将文件内容按'<br/>'分隔为行数组。
         var lines = data.split('<br/>');
+        // 过滤掉包含特定合成成功信息的行。
         lines = lines.filter(line => {
           return !regex.test(line);
         });
+        // 将过滤后的行数组重新组合，并写回原文件。
         fs.writeFileSync(path, lines.join('<br/>'), 'utf-8');
       } catch (err) {
+        // 如果在读写文件过程中出现错误，打印错误信息。
         console.log(err);
       }
     }
     fs.appendFileSync(path, text + '<br/>')
+    return text
   },
   get: (path) => {
     //如果文件不存在则创建

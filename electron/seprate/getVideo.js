@@ -82,27 +82,21 @@ const requestWithRetry = (url, headers, path) => {
 
 
 const requestWithRetryLocal = async (url, headers, path, docPath, name, index) => {
-  let retryCount = 3
-  while (retryCount--) {
-    if (retryCount != 2) {
-      handleLog.set(`🔴 正在下载：${name} 超时重试第 ${3 - retryCount} 次 <br/>`, docPath + '/log.txt')
-    } else {
-      handleLog.set(`🟢 正在下载：${name} ${index}线程 <br/>`, docPath + '/log.txt')
-    }
+  handleLog.set(`🟢 正在下载：${name} ${index}线程 <br/>`, docPath + '/log.txt')
 
-    try {
-      const res = await superagent
-        .get(url + `?t=${new Date().getTime()}`)
-        .set(headers)
-        .timeout({
-          response: 1000 * 5,  //等待服务器响应的时间
-        })
-        .responseType('buffer');
-      return res.body;
-    } catch (err) {
-      if (retryCount === 0) return "";
-      console.log('请求超时，正在尝试再次请求...');
-    }
+  try {
+    const res = await superagent
+      .get(url)
+      .set(headers)
+      .timeout({
+        response: 1000 * 5,  //等待服务器响应的时间
+      })
+      .responseType('buffer');
+    return res.body;
+  } catch (err) {
+    //查看错误信息
+    handleLog.set(`🔴 ${err.response.status + "错误信息：" + err.response.error} <br/>`, docPath + '/log.txt')
+    return "";
   }
 };
 

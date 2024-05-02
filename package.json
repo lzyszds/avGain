@@ -11,7 +11,7 @@
     }
   },
   "scripts": {
-    "dev": "chcp 65001 && vite",
+    "dev": "chcp 65001 && cross-env NODE_OPTIONS='--max-old-space-size=4096' vite",
     "clean": "tsc --build --clean",
     "create": "node createSeprate.js",
     "viteBuild": "vite build",
@@ -59,6 +59,8 @@
     "@vueuse/shared": "^10.6.1",
     "autoprefixer": "^10.4.14",
     "axios": "^1.5.0",
+    "cross-env": "^7.0.3",
+    "echarts": "^5.5.0",
     "element-plus": "^2.3.8",
     "fluent-ffmpeg": "^2.1.2",
     "got": "^10.7.0",
@@ -74,6 +76,7 @@
     "sudo-prompt": "^9.2.1",
     "superagent": "^8.1.2",
     "tailwindcss": "^3.3.3",
+    "thread-pool": "^0.0.1",
     "ts-node": "^10.9.1",
     "typescript": "^5.1.6",
     "unplugin-auto-import": "^0.16.6",
@@ -82,7 +85,8 @@
     "vue": "^3.3.4",
     "vue-demi": "^0.14.6",
     "vue-router": "^4.2.5",
-    "vue-tsc": "^1.8.8"
+    "vue-tsc": "^1.8.8",
+    "winston": "^3.13.0"
   },
   "devDependencies": {
     "@electron-forge/cli": "^6.0.5",

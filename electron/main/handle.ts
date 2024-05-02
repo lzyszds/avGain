@@ -20,18 +20,23 @@ import m3u8Parser from 'm3u8-parser'
  */
 export class WindowManager {
   private win: BrowserWindow;
-  private app: App;
-  private mainWindow: BrowserWindow
-  private pathJson: {
+  public app: App;
+  public mainWindow: BrowserWindow
+  public pathJson: {
     coverPath: string,
     previewPath: string,
     videoPath: string,
     downloadPath: string
-  };
-  private workerArr: Worker[];
-  private docPath: string;
-  private setLog: (msg: string) => void
-  private taskArray: number[] = []
+  };  // 下载配置路径
+  public workerArr: Worker[]; // 线程池
+  public docPath: string;  //文档路径
+  public setLog: (msg: string) => void // 日志
+  public taskArray: number[] = [] //任务id
+  public downLoadConfig = { //下载任务的配置
+    url: '', //视频url
+    name: '', //视频名称
+    designation: ''   //视频番号
+  }
 
   /**
    * Creates an instance of WindowManager.
@@ -79,6 +84,10 @@ export class WindowManager {
   private handleWinAction(arg: string): Promise<string> {
     return new Promise((resolve, reject) => {
       switch (arg) {
+        case 'openDev':
+          this.win.webContents.openDevTools(); // 打开开发者工具
+          resolve('success');
+          break;
         case 'close':
           this.closeWindow(); // 关闭窗口
           resolve('success');
@@ -276,25 +285,29 @@ export class WindowManager {
       const appPath = path.join(__dirname, `../../electron`);
 
       // 解构从前端进程传入的参数。
-      let { resource, name, url, thread, downPath, previewPath, coverPath, videoPath } = arg;
+      let { resource, name, url, thread, downPath } = arg;
       // 获取HTTP请求头信息。
       const headers = getHeaders(resource);
-
+      //截取番号出来
+      const designation = getVideoId(name)
       // 清洗和处理视频名称。
       name = sanitizeVideoName(name);
 
-      //截取番号出来
-      const designation = getVideoId(name)
+      this.downLoadConfig = {
+        url,
+        name,
+        designation: designation!,
+      }
+
       downPath = downPath + `/${designation}`;
       mkdirsSync(downPath);
 
 
       // 从M3U8 URL计算出需要下载的视频文件信息。
-      const { urlPrefix, dataArr } = await processM3u8(url, headers, this.docPath, this.app);
-
+      const { urlPrefix, dataArr, dataCount } = await processM3u8.bind(that, headers)();
       //将视频数量存入store中
       storeData(this.app, {
-        'downloadCount': dataArr.length
+        'downloadCount': dataCount
       })
 
       // 检验SSL证书。
@@ -305,12 +318,18 @@ export class WindowManager {
       // 将M3U8数据分割为等份，按线程数分配。
       const countArr = splitArrayIntoEqualChunks(dataArr, thread);
 
+      //创建进程之前删除旧的进程
+      this.workerArr.forEach((worker) => {
+        worker.terminate()
+      })
 
-      // 为不同的下载线程初始化Worker线程。
+      await terminateAllWorkers();
       for (let i = 0; i < thread; i++) {
+        const separateThread = new Worker(appPath + `\\seprate\\worker.js`);
+        this.workerArr.push(separateThread);
         // 创建一个新的Worker线程实例，用于处理下载任务。
-        const separateThread = new Worker(appPath + `\\seprate\\seprateThread${i + 1}.js`);
         // 向Worker线程发送任务信息，启动下载。
+
         separateThread.postMessage({
           urlData: countArr[i],
           index: i + 1,
@@ -319,9 +338,18 @@ export class WindowManager {
           downPath: downPath,
           docPath: that.docPath
         });
-        that.workerArr.push(separateThread);
       }
     });
+
+    // 在你的主线程中
+    async function terminateAllWorkers() {
+      await Promise.all(that.workerArr.map(worker => new Promise((resolve) => {
+        worker.on('exit', resolve);
+        worker.terminate();
+      })));
+      that.workerArr = [];
+    }
+
   }
   //注册downloadVideoEvent事件监听
   private registerDownloadVideoEvent(): void {
@@ -333,7 +361,7 @@ export class WindowManager {
     this.workerArr.forEach((worker) => {
       worker.terminate()
     })
-
+    this.workerArr = []
     //发送日志提醒
     this.setLog("🟡 下载任务已暂停<br/>")
   }
@@ -369,7 +397,7 @@ export class WindowManager {
         fs.readdirSync(arg).forEach((file) => {
           //判断当前文件是否是文件夹
           if (fs.statSync(arg + '/' + file).isDirectory()) {
-            fs.rmdirSync(arg + '/' + file, { recursive: true })
+            fs.rmSync(arg + '/' + file, { recursive: true })
           } else {
             fs.unlinkSync(arg + '/' + file)
           }
@@ -434,19 +462,23 @@ export class WindowManager {
 
   //合并视频的逻辑
   private async onMergeVideo(event: Electron.IpcMainInvokeEvent, arg: any) {
-    this.setLog(`🟢 开始合并视频 <br/>`)
+    this.setLog(`🟢 开始合并视频 <br/> `)
     let getCoverIndex = 0 //第几次尝试下载图片的索引
     const { previewPath, coverPath, downloadPath, videoPath } = this.pathJson
     let { name } = arg
+    //截取番号出来
+    const designation = getVideoId(name)
     //替换名字非法字符 保留日语和中文字符，并删除其他非字母数字字符
     const newname = sanitizeVideoName(name)
-    //截取番号出来
-    const designation = getVideoId(newname)
+
     if (!designation) return this.setLog(`🔴 未找到番号 <br/>`)
 
     //判断当前视频是否存在
     const existArr = fs.existsSync(videoPath + '/' + newname + '.mp4')
-    if (existArr) return this.setLog(`🟢 视频已存在 无需进行合并 <br/>`)
+    if (existArr) {
+      this.setLog(`🟢 视频已存在 无需进行合并 <br/>`)
+      return;
+    }
 
     const resulted = await merge(newname, downloadPath + `/${designation}`, videoPath)
     if (resulted === '合成成功') {
@@ -658,10 +690,10 @@ function getHeaders(resource) {
 
 //识别视频番号
 function getVideoId(val: string) {
+  let reg = /[a-zA-Z]{2,6}-\d{3,4}/
   //使用正则
-  const reg = /[a-zA-Z]{2,6}-\d{3}/
   const result = val.match(reg)
-  return result ? result[0] : null
+  return result ? val.split(' ')[0].replace('[无码破解]', "") : null
 }
 
 //将数组拆分为相等的块
@@ -709,34 +741,39 @@ function sanitizeVideoName(name) {
  * @param app 用于下载文件的应用上下文（可能用于鉴权等）。
  * @returns 返回一个Promise，解析为一个对象，包含视频名称、URL前缀和未下载的段数据数组。
  */
-async function processM3u8(url, headers, docPath, app) {
-  // 从URL中提取视频名称
-  let videoName = url.split('/')[url.split('/').length - 1].split('.')[0];
-  // 计算URL前缀
-  let urlPrefix = url.split('/').splice(0, url.split('/').length - 1).join('/') + '/';
+async function processM3u8(this: WindowManager, headers) {
+  const { url, designation } = this.downLoadConfig;
+  // 获取M3U8文件的URL前缀。
+  let urlPrefix = url.substring(0, url.lastIndexOf('/')) + '/';
 
   try {
     // 下载M3U8文件
-    const m3u8Data = await downloadM3U8(url, headers, docPath, app);
+    const m3u8Data = await downloadM3U8(url, headers, this.docPath, this.app);
     // 解析M3U8文件
     const myParser = new m3u8Parser.Parser();
     myParser.push(m3u8Data);
     myParser.end();
 
-    // 获取并过滤已下载的段数据
-    let dataArr = myParser.manifest.segments;
-    dataArr = dataArr.filter((item) => {
-      const filePath = path.join(docPath, videoName, item.uri);
-      return !fs.existsSync(filePath);
+    // 初始化并获取过滤后的段数据
+    let dataArr = myParser.manifest.segments || [];
+    const dataCount = dataArr.length;
+    const filePath = path.join(this.pathJson.downloadPath, designation);
+
+    // 使用异步方式读取目录避免性能问题
+    const files = fs.readdirSync(filePath);
+    files.forEach((file) => {
+      dataArr = dataArr.filter((item) => {
+        const fileName = path.basename(item.uri);
+        return fileName.replace(/[^\d]/g, '') !== file.replace(/[^\d]/g, '');
+      });
     });
-
-    return { videoName, urlPrefix, dataArr };
+    return { urlPrefix, dataArr, dataCount };
   } catch (e) {
-    handleLog.set(`🔴 下载出错: ${e} <br/>`, docPath + '/log.txt')
+    // 异步日志记录
+    await handleLog.set(`🔴 下载出错: ${e} <br/>`, `${this.docPath}/log.txt`);
     // 出错时返回空的段数据数组
-    return { videoName, urlPrefix, dataArr: [] };
+    return { urlPrefix, dataArr: [], dataCount: 0 };
   }
-
 }
 
 
@@ -763,8 +800,3 @@ function deleteDirFile(path: string, retries = 3, delay = 3000) {
     })
   }
 }
-
-
-
-
-

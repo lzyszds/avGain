@@ -949,6 +949,7 @@ const handleLog = {
       }
     }
     fs.appendFileSync(path2, text + "<br/>");
+    return text;
   },
   get: (path2) => {
     if (!fs.existsSync(path2)) {
@@ -1018,10 +1019,24 @@ class WindowManager {
     __publicField(this, "app");
     __publicField(this, "mainWindow");
     __publicField(this, "pathJson");
+    // 下载配置路径
     __publicField(this, "workerArr");
+    // 线程池
     __publicField(this, "docPath");
+    //文档路径
     __publicField(this, "setLog");
+    // 日志
     __publicField(this, "taskArray", []);
+    //任务id
+    __publicField(this, "downLoadConfig", {
+      //下载任务的配置
+      url: "",
+      //视频url
+      name: "",
+      //视频名称
+      designation: ""
+      //视频番号
+    });
     this.win = win2;
     this.app = app;
     this.mainWindow = mainWindow;
@@ -1056,6 +1071,10 @@ class WindowManager {
   handleWinAction(arg) {
     return new Promise((resolve, reject) => {
       switch (arg) {
+        case "openDev":
+          this.win.webContents.openDevTools();
+          resolve("success");
+          break;
         case "close":
           this.closeWindow();
           resolve("success");
@@ -1228,23 +1247,33 @@ class WindowManager {
     const that = this;
     return new Promise(async (resolve, reject) => {
       const appPath = path$1.join(__dirname, `../../electron`);
-      let { resource, name, url: url2, thread, downPath, previewPath, coverPath, videoPath } = arg;
+      let { resource, name, url: url2, thread, downPath } = arg;
       const headers = getHeaders(resource);
-      name = sanitizeVideoName(name);
       const designation = getVideoId(name);
+      name = sanitizeVideoName(name);
+      this.downLoadConfig = {
+        url: url2,
+        name,
+        designation
+      };
       downPath = downPath + `/${designation}`;
       mkdirsSync(downPath);
-      const { urlPrefix, dataArr } = await processM3u8(url2, headers, this.docPath, this.app);
+      const { urlPrefix, dataArr, dataCount } = await processM3u8.bind(that, headers)();
       storeData(this.app, {
-        "downloadCount": dataArr.length
+        "downloadCount": dataCount
       });
       if (dataArr.length === 0) {
         this.setLog("🔴 无法验证第一个证书 <br/>");
         return resolve("无法验证第一个证书");
       }
       const countArr = splitArrayIntoEqualChunks(dataArr, thread);
+      this.workerArr.forEach((worker) => {
+        worker.terminate();
+      });
+      await terminateAllWorkers();
       for (let i = 0; i < thread; i++) {
-        const separateThread = new worker_threads.Worker(appPath + `\\seprate\\seprateThread${i + 1}.js`);
+        const separateThread = new worker_threads.Worker(appPath + `\\seprate\\worker.js`);
+        this.workerArr.push(separateThread);
         separateThread.postMessage({
           urlData: countArr[i],
           index: i + 1,
@@ -1253,9 +1282,15 @@ class WindowManager {
           downPath,
           docPath: that.docPath
         });
-        that.workerArr.push(separateThread);
       }
     });
+    async function terminateAllWorkers() {
+      await Promise.all(that.workerArr.map((worker) => new Promise((resolve) => {
+        worker.on("exit", resolve);
+        worker.terminate();
+      })));
+      that.workerArr = [];
+    }
   }
   //注册downloadVideoEvent事件监听
   registerDownloadVideoEvent() {
@@ -1266,6 +1301,7 @@ class WindowManager {
     this.workerArr.forEach((worker) => {
       worker.terminate();
     });
+    this.workerArr = [];
     this.setLog("🟡 下载任务已暂停<br/>");
   }
   registerPauseDownloadEvent() {
@@ -1294,7 +1330,7 @@ class WindowManager {
       try {
         fs.readdirSync(arg).forEach((file) => {
           if (fs.statSync(arg + "/" + file).isDirectory()) {
-            fs.rmdirSync(arg + "/" + file, { recursive: true });
+            fs.rmSync(arg + "/" + file, { recursive: true });
           } else {
             fs.unlinkSync(arg + "/" + file);
           }
@@ -1350,17 +1386,19 @@ class WindowManager {
   }
   //合并视频的逻辑
   async onMergeVideo(event, arg) {
-    this.setLog(`🟢 开始合并视频 <br/>`);
+    this.setLog(`🟢 开始合并视频 <br/> `);
     let getCoverIndex = 0;
     const { previewPath, coverPath, downloadPath, videoPath } = this.pathJson;
     let { name } = arg;
+    const designation = getVideoId(name);
     const newname = sanitizeVideoName(name);
-    const designation = getVideoId(newname);
     if (!designation)
       return this.setLog(`🔴 未找到番号 <br/>`);
     const existArr = fs.existsSync(videoPath + "/" + newname + ".mp4");
-    if (existArr)
-      return this.setLog(`🟢 视频已存在 无需进行合并 <br/>`);
+    if (existArr) {
+      this.setLog(`🟢 视频已存在 无需进行合并 <br/>`);
+      return;
+    }
     const resulted = await merge(newname, downloadPath + `/${designation}`, videoPath);
     if (resulted === "合成成功") {
       await this.getPreviewVideo(designation, newname, getCoverIndex, previewPath, coverPath);
@@ -1537,9 +1575,9 @@ function getHeaders(resource) {
   return headers;
 }
 function getVideoId(val) {
-  const reg = /[a-zA-Z]{2,6}-\d{3}/;
+  let reg = /[a-zA-Z]{2,6}-\d{3,4}/;
   const result = val.match(reg);
-  return result ? result[0] : null;
+  return result ? val.split(" ")[0].replace("[无码破解]", "") : null;
 }
 function splitArrayIntoEqualChunks(array, numberOfChunks) {
   const chunkSize = Math.ceil(array.length / numberOfChunks);
@@ -1552,23 +1590,28 @@ function splitArrayIntoEqualChunks(array, numberOfChunks) {
 function sanitizeVideoName(name) {
   return name.replace("[无码破解]", "").replaceAll(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, "").replaceAll(/[\·\・\●\/]/g, "").replaceAll(" ", "");
 }
-async function processM3u8(url2, headers, docPath, app) {
-  let videoName = url2.split("/")[url2.split("/").length - 1].split(".")[0];
-  let urlPrefix = url2.split("/").splice(0, url2.split("/").length - 1).join("/") + "/";
+async function processM3u8(headers) {
+  const { url: url2, designation } = this.downLoadConfig;
+  let urlPrefix = url2.substring(0, url2.lastIndexOf("/")) + "/";
   try {
-    const m3u8Data = await downloadM3U8(url2, headers, docPath, app);
+    const m3u8Data = await downloadM3U8(url2, headers, this.docPath, this.app);
     const myParser = new m3u8Parser.Parser();
     myParser.push(m3u8Data);
     myParser.end();
-    let dataArr = myParser.manifest.segments;
-    dataArr = dataArr.filter((item) => {
-      const filePath = path$1.join(docPath, videoName, item.uri);
-      return !fs.existsSync(filePath);
+    let dataArr = myParser.manifest.segments || [];
+    const dataCount = dataArr.length;
+    const filePath = path$1.join(this.pathJson.downloadPath, designation);
+    const files = fs.readdirSync(filePath);
+    files.forEach((file) => {
+      dataArr = dataArr.filter((item) => {
+        const fileName = path$1.basename(item.uri);
+        return fileName.replace(/[^\d]/g, "") !== file.replace(/[^\d]/g, "");
+      });
     });
-    return { videoName, urlPrefix, dataArr };
+    return { urlPrefix, dataArr, dataCount };
   } catch (e) {
-    handleLog.set(`🔴 下载出错: ${e} <br/>`, docPath + "/log.txt");
-    return { videoName, urlPrefix, dataArr: [] };
+    await handleLog.set(`🔴 下载出错: ${e} <br/>`, `${this.docPath}/log.txt`);
+    return { urlPrefix, dataArr: [], dataCount: 0 };
   }
 }
 process.env.DIST_ELECTRON = path.join(__dirname, "..");
@@ -1618,7 +1661,6 @@ async function createWindow() {
   });
   if (process.env.VITE_DEV_SERVER_URL) {
     win.loadURL(url);
-    win.webContents.openDevTools();
   } else {
     win.loadFile(indexHtml);
   }
@@ -1639,6 +1681,10 @@ require$$3.app.whenReady().then(async () => {
     const mainWindow = await createWindow();
     new WindowManager(win, require$$3.app, mainWindow);
     loadingWindow == null ? void 0 : loadingWindow.close();
+    mainWindow.webContents.on("did-finish-load", (event, args) => {
+      mainWindow.webContents.setZoomFactor(1);
+      mainWindow.webContents.setVisualZoomLevelLimits(1, 1);
+    });
   }, 2e3);
 });
 require$$3.app.on("window-all-closed", () => {

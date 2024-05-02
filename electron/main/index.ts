@@ -82,7 +82,7 @@ async function createWindow() {
   if (process.env.VITE_DEV_SERVER_URL) { // 如果环境变量VITE_DEV_SERVER_URL存在
     win.loadURL(url) // 加载url
     // 如果应用程序未打包，请打开devTool
-    win.webContents.openDevTools() // 打开开发者工具
+    // win.webContents.openDevTools() // 打开开发者工具
   } else {
     win.loadFile(indexHtml) // 加载indexHtml文件
   }
@@ -114,6 +114,10 @@ app.whenReady().then(async () => {
     //对窗口进行操作（放大缩小关闭）在此操作自定义属性
     new WindowManager(win!, app, mainWindow);
     loadingWindow?.close()
+    mainWindow.webContents.on("did-finish-load", (event, args) => {
+      mainWindow.webContents.setZoomFactor(1);
+      mainWindow.webContents.setVisualZoomLevelLimits(1, 1);
+    })
   }, 2000)
 
 })

@@ -1,9 +1,15 @@
 <script lang="ts" setup>
-import { computed, reactive, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import { ElNotification, dayjs } from "element-plus";
 import LzyIcon from "@/components/LzyIcon.vue";
 import { useStorage } from "@vueuse/core";
 import duration from "dayjs/plugin/duration";
+import {
+  formatFileSize,
+  handleLogData,
+  handleSpeedEchart,
+  handleEchart,
+} from "@/utils";
 
 dayjs.extend(duration);
 
@@ -31,6 +37,7 @@ const sizeForm = useStorage("sizeForm", {
   url: "", //m3u8链接
   thread: 50, //下载进程数量
   isAutoTask: true, //是否开启自动替换任务
+  outTimer: 10, //超时重下时间
 });
 
 //获取本地存储中的下载进度
@@ -70,8 +77,8 @@ const downloadTime = computed(() => {
 async function onSubmit() {
   let downLoadAfterCopy: number[] = [];
   isStartDown.value = !isStartDown.value;
+  timer && clearInterval(timer);
   if (!isStartDown.value) {
-    timer && clearInterval(timer);
     await el.pauseDownloadEvent();
     return ElNotification({
       title: "下载已暂停",
@@ -79,7 +86,6 @@ async function onSubmit() {
       type: "warning",
     });
   }
-  timer && clearInterval(timer);
   const { name, url } = sizeForm.value;
   if (!name || !url) return;
 
@@ -108,14 +114,14 @@ async function onSubmit() {
       downLoadAfterCopy[after] += 1;
     }
     //如果下载不动 时间超过60秒，则重新开始下载
-    if (downLoadAfterCopy[after] > 15) {
+    if (downLoadAfterCopy[after] > sizeForm.value.outTimer) {
+      timer && clearInterval(timer);
       ElNotification({
         title: "下载提示：",
         message: "下载异常，已停止下载",
         type: "error",
       });
       isStartDown.value = false;
-      timer && clearInterval(timer);
       //重新开始下载
       return onSubmit();
     } else {
@@ -136,6 +142,7 @@ async function onSubmit() {
       setTimeout(() => {
         getDownloadListContent(); //更新下载列表
         updateSpeedDownload(); //更新下载速度
+        el.onClearSystemLog(); // 清空日志
         onAutoReplaceTask(); //判断是否开启自动替换任务
       }, 1000);
     }
@@ -192,23 +199,13 @@ function deleteDirFile() {
 //合并视频（以解决视频不合并的问题）
 async function onMergeVideo() {
   const { name } = sizeForm.value;
+  console.log(`lzy  name:`, name);
   const msg = await el.onMergeVideo({
     name,
   });
-  if (msg == name) {
-  }
-}
-//格式化文件大小
-function formatFileSize(fileSize: any) {
-  const units = ["B", "KB", "MB", "GB", "TB"];
-  let index = 0;
-
-  while (fileSize >= 1024 && index < units.length - 1) {
-    fileSize /= 1024;
-    index++;
-  }
-
-  return fileSize.toFixed(2) + units[index];
+  getDownloadListContent(); //更新下载列表
+  updateSpeedDownload(); //更新下载速度
+  onAutoReplaceTask(); //判断是否开启自动替换任务
 }
 
 let oldSize = 0;
@@ -228,6 +225,17 @@ const updateSpeedDownload = () => {
   speedDownload.value =
     Number(size.replace(/[KMGT]B/, "")) > 0 ? sizeName : "0.00B";
 
+  logData.speedEchart.setOption({
+    series: [
+      {
+        data: [
+          {
+            value: Number(size.replace(/[KMGT]B/, "")),
+          },
+        ],
+      },
+    ],
+  });
   oldSize = totalSize;
 };
 
@@ -279,7 +287,11 @@ const logData = reactive({
   value: "", //日志内容
   logTimer: null as any, //日志定时器
   isOnScroll: true, //是否自动滚动
+  arr: [] as any[], //日志数组
+  workerEchart: null as any, //echart图表
+  speedEchart: null as any, //速度图表
 });
+
 const getSystemLog = async () => {
   const systemLog = document.querySelector(".systemLog > div") as HTMLElement;
   // await el.onClearSystemLog();
@@ -287,19 +299,45 @@ const getSystemLog = async () => {
   logData.logTimer = setInterval(async () => {
     const res = await el.onGetSystemLog();
     logData.value = res.split("<br/>");
+    logData.arr = res.split("<br/>").filter((res) => res.includes("正在下载"));
     //如果日志内容超过100条，则只显示最新的100条
     if (logData.value.length > 100) {
       logData.value = logData.value.slice(logData.value.length - 100);
     }
+    //@ts-ignore
+    logData.value.reverse();
     //如果自动滚动条开启，则将滚动条滚动到最底部
     if (!logData.isOnScroll) return;
     //将滚动条滚动到最底部
     try {
       systemLog.scrollTop = systemLog.scrollHeight;
     } catch (e) {}
+    //设置进程下载进度echart图表
+    logData.workerEchart.setOption({
+      series: [
+        {
+          data: handleLogData(logData.arr),
+        },
+      ],
+    });
   }, 500);
 };
 await getSystemLog();
+
+onMounted(() => {
+  logData.workerEchart = handleEchart(sizeForm.value, logData);
+  logData.speedEchart = handleSpeedEchart(logData);
+});
+
+onBeforeUnmount(async () => {
+  //将日志定时器清除
+  logData.logTimer && clearInterval(logData.logTimer);
+  timer && clearInterval(timer);
+  if (isStartDown.value) {
+    //暂停下载
+    await el.pauseDownloadEvent();
+  }
+});
 </script>
 <template>
   <div class="addWhole">
@@ -320,28 +358,29 @@ await getSystemLog();
       </li>
       <li class="tools">
         <LzyBtn
-          :handle="getDownloadListContent"
+          @click="getDownloadListContent"
           title="刷新"
           icon="ant-design:reload-outlined"
         ></LzyBtn>
         <LzyBtn
-          :handle="deleteDirFile"
+          @click="deleteDirFile"
           title="清空"
           icon="ant-design:delete-twotone"
         ></LzyBtn>
         <LzyBtn
           :title="getDownloadSize()"
-          :handle="onOpenDir"
+          @click="onOpenDir"
           icon="ic:baseline-insert-chart-outlined"
         ></LzyBtn>
         <LzyBtn
-          :handle="onMergeVideo"
+          @click="onMergeVideo()"
           title="合成"
           icon="gg:merge-horizontal"
         ></LzyBtn>
       </li>
       <div class="systemLog">
-        <div>
+        <div class="speedEcharts"></div>
+        <div class="logContent">
           <p v-for="(item, index) in logData.value" :key="index">{{ item }}</p>
         </div>
         <section>
@@ -359,11 +398,11 @@ await getSystemLog();
       </div>
     </ul>
     <div class="addMain">
-      <h1 style="text-align: center; padding-bottom: 20px">
+      <!-- <h1 style="text-align: center; padding-bottom: 20px">
         欢迎使用
         <img src="../../public/logo.png" width="40" height="40" />
         <span class="av">AudioVideo_Gain</span>
-      </h1>
+      </h1> -->
       <el-form
         ref="form"
         :model="sizeForm"
@@ -390,12 +429,20 @@ await getSystemLog();
         </el-form-item>
         <el-form-item label="下载线程" class="downloadSet">
           <el-input v-model="sizeForm.thread" type="number" max="50" min="1" />
-          自动替换任务
-          <el-switch
-            v-model="sizeForm.isAutoTask"
-            active-text="是"
-            inactive-text="否"
-          />
+          <span class="outTimer">
+            超时时间
+            <el-input v-model="sizeForm.outTimer" type="number">
+              <template #append>s</template>
+            </el-input>
+          </span>
+          <span>
+            自动替换任务
+            <el-switch
+              v-model="sizeForm.isAutoTask"
+              active-text="是"
+              inactive-text="否"
+            />
+          </span>
         </el-form-item>
         <el-form-item class="sumbit">
           <!-- v-show="speedDownload" -->
@@ -407,7 +454,11 @@ await getSystemLog();
           </div>
         </el-form-item>
         <ElFormItem>
-          <button class="button download" @click="onSubmit" type="button">
+          <button
+            :class="['button', 'download', isStartDown ? 'start' : 'stop']"
+            @click="onSubmit"
+            type="button"
+          >
             <lzy-icon
               :name="
                 isStartDown
@@ -455,6 +506,7 @@ await getSystemLog();
           </el-form-item>
         </el-card>
       </div>
+      <div class="echartMain"></div>
     </div>
     <div class="footer">
       <el-collapse class="collapse" v-model="activeNames" :accordion="true">
@@ -538,7 +590,12 @@ ul {
     display: grid;
     gap: 5px;
     width: 100%;
-    & > div {
+    div.speedEcharts {
+      height: 200px;
+      border: 2px solid var(--themeColor);
+      border-radius: 10px;
+    }
+    & > div.logContent {
       overflow: auto;
       height: 200px;
       border: 2px solid var(--themeColor);
@@ -564,13 +621,12 @@ ul {
 }
 
 .addMain {
-  height: 93%;
+  height: 98%;
   display: grid;
-  grid-template-rows: 60px 345px 1fr;
-  gap: 20px;
+  grid-template-rows: 325px 30px 440px 1fr;
+  gap: 10px;
   user-select: none !important;
-  padding: 30px;
-  padding-top: 0;
+  padding: 0 30px;
 
   h1 {
     margin: 0;
@@ -589,18 +645,21 @@ ul {
   :deep(.el-collapse-item__content) {
     user-select: auto !important;
   }
-
-  .el-form {
-    padding-top: 20px;
-  }
   .downloadSet :deep(.el-form-item__content) {
     display: grid;
-    grid-template-columns: 100px 90px 100px;
+    grid-template-columns: 100px 200px 200px;
     gap: 10px;
     font-family: "almama";
     color: #000 !important;
     span.is-text {
       color: #22ffa3 !important;
+    }
+    .outTimer {
+      display: flex;
+      gap: 10px;
+      .el-input {
+        width: 65%;
+      }
     }
   }
 
@@ -635,8 +694,6 @@ ul {
 
   .alternateList {
     overflow-y: scroll;
-    height: 450px;
-
     .el-card {
       margin-bottom: 10px;
       position: relative;
@@ -678,6 +735,12 @@ ul {
       font-family: "almama";
       color: #000 !important;
     }
+  }
+
+  .echartMain {
+    height: calc(100% - 10px);
+    border-radius: 10px;
+    box-shadow: 0 0 1px 1px rgba(59, 48, 78, 0.3);
   }
 }
 
@@ -740,6 +803,9 @@ ul {
         content: "下载进度：";
         font-family: "almama";
       }
+      span {
+        color: #fff !important;
+      }
     }
   }
 }
@@ -760,6 +826,11 @@ ul {
   position: relative;
   justify-content: center;
   transition: all 0.3s;
+  &.start {
+    background: #22ffa3;
+    color: #000;
+  }
+
   svg {
     margin-right: 8px;
     width: 25px;
