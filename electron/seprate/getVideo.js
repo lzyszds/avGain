@@ -14,13 +14,7 @@ const { exec } = require('child_process');
 */
 function getVideo(urlData, i, index, urlPrefix, headers, path, docPath) {
   if (!urlData[i]) return '没有视频了'
-  const source = urlData[i].uri.indexOf('video') === 0 ? 'av' : 'super';
-  let match
-  if (source === 'av') {
-    match = urlData[i].uri.match(/(\d+).jpeg$/);
-  } else {
-    match = urlData[i].uri.match(/(\d{4}).jpg$/);
-  }
+  let match = urlData[i].uri.match(/(\d{4}).(jpg|jpeg|png)$/);
 
   //如果当前视频节点已经下载完成，就跳过  
   if (fs.existsSync(`${path}/${match[1]}.ts`)) {
