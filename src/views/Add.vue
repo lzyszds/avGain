@@ -81,8 +81,8 @@ async function onSubmit() {
   if (!isStartDown.value) {
     await el.pauseDownloadEvent();
     return ElNotification({
-      title: "下载已暂停",
-      message: sizeForm.value.name,
+      title: "下载提示",
+      message: "下载已暂停",
       type: "warning",
     });
   }
@@ -91,7 +91,7 @@ async function onSubmit() {
 
   ElNotification({
     title: "下载提示：",
-    message: "开始下载：" + name,
+    message: "开始下载",
     type: "success",
   });
 
