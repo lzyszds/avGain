@@ -329,7 +329,6 @@ export class WindowManager {
         this.workerArr.push(separateThread);
         // 创建一个新的Worker线程实例，用于处理下载任务。
         // 向Worker线程发送任务信息，启动下载。
-
         separateThread.postMessage({
           urlData: countArr[i],
           index: i + 1,

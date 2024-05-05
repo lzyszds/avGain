@@ -1,7 +1,7 @@
 {
   "name": "AvGain",
   "private": true,
-  "version": "1.2.3",
+  "version": "1.2.4",
   "main": "dist-electron/main/index.js",
   "description": "av爬取软件",
   "author": "lzyszds",

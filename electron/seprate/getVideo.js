@@ -1,7 +1,5 @@
 const superagent = require("superagent");
 const fs = require("fs");
-const { exec } = require('child_process');
-
 
 // 封装递归方法
 /* 
@@ -11,10 +9,14 @@ const { exec } = require('child_process');
   urlPrefix:视频地址前缀
   headers:请求头
   path:保存文件夹路径
+  docPath:日志文件路径
 */
 function getVideo(urlData, i, index, urlPrefix, headers, path, docPath) {
   if (!urlData[i]) return '没有视频了'
-  let match = urlData[i].uri.match(/(\d{4}).(jpg|jpeg|png)$/);
+  let match = urlData[i].uri.match(/(\d{1,4}).(jpg|jpeg|png)$/);
+  if (!match) {
+    handleLog.set(`🔴 没法获取(getVideo.js):${urlData[i].uri} <br/>`, docPath + '/log.txt')
+  }
 
   //如果当前视频节点已经下载完成，就跳过  
   if (fs.existsSync(`${path}/${match[1]}.ts`)) {
@@ -62,22 +64,8 @@ function getVideo(urlData, i, index, urlPrefix, headers, path, docPath) {
 }
 module.exports = getVideo;
 
-//aria2c版本
-const requestWithRetry = (url, headers, path) => {
-  return new Promise(async (resolve, reject) => {
-    try {
-      await aria2cDownload(url, headers, path)
-    } catch (err) {
-      reject(err)
-    }
-  })
-};
-
-
-
 const requestWithRetryLocal = async (url, headers, path, docPath, name, index) => {
   handleLog.set(`🟢 正在下载：${name} ${index}线程 <br/>`, docPath + '/log.txt')
-
   try {
     const res = await superagent
       .get(url)
@@ -88,34 +76,15 @@ const requestWithRetryLocal = async (url, headers, path, docPath, name, index) =
       .responseType('buffer');
     return res.body;
   } catch (err) {
-    //查看错误信息
-    handleLog.set(`🔴 ${err.response.status + "错误信息：" + err.response.error} <br/>`, docPath + '/log.txt')
+    if (err.response) {
+      //查看错误信息
+      handleLog.set(`🔴 ${err.response.status + "错误信息：" + err.response.error} <br/>`, docPath + '/log.txt')
+    } else {
+      handleLog.set(`🔴 错误信息：${err} <br/>`, docPath + '/log.txt')
+    }
     return "";
   }
 };
-
-
-
-
-//使用aria2c下载
-function aria2cDownload(url, headers, outputPath) {
-  headers = `-H "Accept: */*" -H "accept-language: zh-CN,zh;q=0.9,en;q=0.8" -H "Referer: https://emturbovid.com/" -H "Referrer-Policy: strict-origin-when-cross-origin"`;
-  let name = url.match(/(\d{4}).jpg$/)[1];
-
-  return new Promise((resolve, reject) => {
-    exec(`curl -L -o ${outputPath}/${name}.ts ${headers} ${url}`, (error, stdout, stderr) => {
-      if (error) {
-        reject(error);
-      }
-      if (stderr) {
-        //弹出错误信息
-        reject(stderr);
-      }
-      resolve(true);
-    });
-  });
-}
-
 
 //设置系统日志功能
 const handleLog = {
