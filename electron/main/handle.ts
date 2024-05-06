@@ -13,6 +13,7 @@ import { dayjs } from 'element-plus'
 import { Worker } from "worker_threads";
 import { merge } from '../utils/merge'
 import m3u8Parser from 'm3u8-parser'
+import URL from 'url';
 
 /**
  * @export
@@ -304,7 +305,7 @@ export class WindowManager {
 
 
       // 从M3U8 URL计算出需要下载的视频文件信息。
-      const { urlPrefix, dataArr, dataCount } = await processM3u8.bind(that, headers)();
+      const { dataArr, dataCount } = await processM3u8.bind(that, headers)();
       //将视频数量存入store中
       storeData(this.app, {
         'downloadCount': dataCount
@@ -333,7 +334,6 @@ export class WindowManager {
           urlData: countArr[i],
           index: i + 1,
           headers: headers,
-          urlPrefix: urlPrefix,
           downPath: downPath,
           docPath: that.docPath
         });
@@ -742,8 +742,6 @@ function sanitizeVideoName(name) {
  */
 async function processM3u8(this: WindowManager, headers) {
   const { url, designation } = this.downLoadConfig;
-  // 获取M3U8文件的URL前缀。
-  let urlPrefix = url.substring(0, url.lastIndexOf('/')) + '/';
 
   try {
     // 下载M3U8文件
@@ -766,12 +764,15 @@ async function processM3u8(this: WindowManager, headers) {
         return fileName.replace(/[^\d]/g, '') !== file.replace(/[^\d]/g, '');
       });
     });
-    return { urlPrefix, dataArr, dataCount };
+    dataArr = dataArr.map((item) => {
+      return URL.resolve(url, item.uri);
+    })
+    return { dataArr, dataCount };
   } catch (e) {
     // 异步日志记录
     await handleLog.set(`🔴 下载出错: ${e} <br/>`, `${this.docPath}/log.txt`);
     // 出错时返回空的段数据数组
-    return { urlPrefix, dataArr: [], dataCount: 0 };
+    return { dataArr: [], dataCount: 0 };
   }
 }
 

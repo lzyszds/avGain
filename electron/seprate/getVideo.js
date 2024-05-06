@@ -11,23 +11,23 @@ const fs = require("fs");
   path:保存文件夹路径
   docPath:日志文件路径
 */
-function getVideo(urlData, i, index, urlPrefix, headers, path, docPath) {
+function getVideo(urlData, i, index, headers, path, docPath) {
   if (!urlData[i]) return '没有视频了'
-  let match = urlData[i].uri.match(/(\d{1,4}).(jpg|jpeg|png)$/);
+  let match = urlData[i].match(/(\d{1,4}).(jpg|jpeg|png)$/);
   if (!match) {
-    handleLog.set(`🔴 没法获取(getVideo.js):${urlData[i].uri} <br/>`, docPath + '/log.txt')
+    handleLog.set(`🔴 没法获取(getVideo.js):${urlData[i]} <br/>`, docPath + '/log.txt')
   }
 
   //如果当前视频节点已经下载完成，就跳过  
   if (fs.existsSync(`${path}/${match[1]}.ts`)) {
-    return getVideo(urlData, ++i, index, urlPrefix, headers, path, docPath);
+    return getVideo(urlData, ++i, index, headers, path, docPath);
   }
 
   return new Promise(async (resolve, reject) => {
     let res
     try {
       res = await requestWithRetryLocal(
-        urlPrefix + urlData[i].uri,
+        urlData[i],
         headers,
         path,
         docPath,
@@ -39,7 +39,7 @@ function getVideo(urlData, i, index, urlPrefix, headers, path, docPath) {
     }
 
     if (!res) {
-      return await getVideo(urlData, ++i, index, urlPrefix, headers, path, docPath);
+      return await getVideo(urlData, ++i, index, headers, path, docPath);
     }
     // 获取文件夹的存储大小
     // 将视频流生成二进制数据
@@ -55,7 +55,7 @@ function getVideo(urlData, i, index, urlPrefix, headers, path, docPath) {
         return;
       }
       if (i < urlData.length) {
-        await getVideo(urlData, ++i, index, urlPrefix, headers, path, docPath);
+        await getVideo(urlData, ++i, index, headers, path, docPath);
       } else { // 提示用户下载完成
         resolve('下载完成')
       }

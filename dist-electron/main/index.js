@@ -17,6 +17,7 @@ const elementPlus = require("element-plus");
 const worker_threads = require("worker_threads");
 const child_process = require("child_process");
 const m3u8Parser = require("m3u8-parser");
+const URL = require("url");
 var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
 function getDefaultExportFromCjs(x) {
   return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
@@ -1258,7 +1259,7 @@ class WindowManager {
       };
       downPath = downPath + `/${designation}`;
       mkdirsSync(downPath);
-      const { urlPrefix, dataArr, dataCount } = await processM3u8.bind(that, headers)();
+      const { dataArr, dataCount } = await processM3u8.bind(that, headers)();
       storeData(this.app, {
         "downloadCount": dataCount
       });
@@ -1278,7 +1279,6 @@ class WindowManager {
           urlData: countArr[i],
           index: i + 1,
           headers,
-          urlPrefix,
           downPath,
           docPath: that.docPath
         });
@@ -1592,7 +1592,6 @@ function sanitizeVideoName(name) {
 }
 async function processM3u8(headers) {
   const { url: url2, designation } = this.downLoadConfig;
-  let urlPrefix = url2.substring(0, url2.lastIndexOf("/")) + "/";
   try {
     const m3u8Data = await downloadM3U8(url2, headers, this.docPath, this.app);
     const myParser = new m3u8Parser.Parser();
@@ -1608,10 +1607,13 @@ async function processM3u8(headers) {
         return fileName.replace(/[^\d]/g, "") !== file.replace(/[^\d]/g, "");
       });
     });
-    return { urlPrefix, dataArr, dataCount };
+    dataArr = dataArr.map((item) => {
+      return URL.resolve(url2, item.uri);
+    });
+    return { dataArr, dataCount };
   } catch (e) {
     await handleLog.set(`🔴 下载出错: ${e} <br/>`, `${this.docPath}/log.txt`);
-    return { urlPrefix, dataArr: [], dataCount: 0 };
+    return { dataArr: [], dataCount: 0 };
   }
 }
 process.env.DIST_ELECTRON = path.join(__dirname, "..");
