@@ -65,7 +65,7 @@ function getVideo(urlData, i, index, headers, path, docPath) {
 export default getVideo;
 
 const requestWithRetryLocal = async (url, headers, path, docPath, name, index) => {
-  handleLog.set(`🟢 正在下载：${name} ${index}线程 <br/>`, docPath + '/log.txt')
+  // handleLog.set(`🟢 正在下载：${name} ${index}线程 <br/>`, docPath + '/log.txt')
   try {
     const res = await superagent
       .get(url)

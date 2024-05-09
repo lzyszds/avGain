@@ -226,3 +226,10 @@ export function handleLogData(val) {
       return a;
     }, []);
 }
+
+export function getVideoId(val: string) {
+  let reg = /[a-zA-Z]{2,6}-\d{3,4}/
+  //使用正则
+  const result = val.match(reg)
+  return result ? val.split(' ')[0].replace('[无码破解]', "") : null
+}

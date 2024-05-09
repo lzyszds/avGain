@@ -1,5 +1,12 @@
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue";
+import {
+  computed,
+  onBeforeUnmount,
+  onMounted,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 import { ElNotification, dayjs } from "element-plus";
 import LzyIcon from "@/components/LzyIcon.vue";
 import { useStorage } from "@vueuse/core";
@@ -7,8 +14,8 @@ import duration from "dayjs/plugin/duration";
 import {
   formatFileSize,
   handleLogData,
-  handleSpeedEchart,
   handleEchart,
+  getVideoId,
 } from "@/utils";
 
 dayjs.extend(duration);
@@ -43,16 +50,31 @@ const codeValue = reactive({
   value: "",
   isShow: false,
 });
-
-const onInspectId = async () => {
-  if (!codeValue.value) return;
-  codeValue.value = codeValue.value.toUpperCase().replace(/ /g, "");
+//检测番号是否存在
+const onInspectId = async (name?: string) => {
+  let id = typeof name === "string" ? name : codeValue.value;
+  if (!id) return;
+  id = id.toUpperCase().replace(/ /g, "");
   //如果存在番号，则将isShow设置为true
-  codeValue.isShow = await el.onInspectId(codeValue.value);
-  ElNotification({
-    title: "番号检测",
-    message: codeValue.isShow ? "番号已存在" : "番号不存在",
-    type: codeValue.isShow ? "error" : "success",
+  codeValue.isShow = await el.onInspectId(id);
+  if (name && codeValue.isShow) {
+    return ElNotification({
+      title: "番号检测",
+      message: "番号已存在",
+      type: "error",
+    });
+  } else if (!name) {
+    ElNotification({
+      title: "番号检测",
+      message: codeValue.isShow ? "番号已存在" : "番号不存在",
+      type: codeValue.isShow ? "error" : "success",
+    });
+  }
+};
+//检测所有备选番号在视频文件夹中是否存在
+const inspectAllId = async () => {
+  alternateArr.value.forEach(async (res) => {
+    await onInspectId(res.name);
   });
 };
 
@@ -60,8 +82,51 @@ const onInspectId = async () => {
 const storeData = ref(await el.onGetDownloadProgress(sizeForm.value.name));
 
 const alternateArr = useStorage("alternateArr", [{ name: "", url: "" }]);
+
+// 监听 alternateArr.value 的变化
+watch(
+  () => alternateArr.value,
+  (val) => {
+    // 过滤掉没有 name 属性的项
+    const arr = val.filter((res) => res.name);
+    // 获取过滤后数组的最后一个元素
+    const afterValue = arr[arr.length - 1];
+    // 根据最后一个元素的 name 获取视频 ID
+    const afterId = getVideoId(afterValue.name)!;
+    // 如果无法获取到 ID，则直接返回
+    if (!afterId) return;
+
+    // 遍历数组，检查新增的内容是否已经存在于数组中（除最后一个元素）
+    arr.forEach((res, index) => {
+      if (index === arr.length - 1) return; // 跳过最后一个元素
+      // 获取当前元素基于 name 的视频 ID
+      const id = getVideoId(res.name)!;
+      // 如果当前元素的 name 存在，并且其 ID 与最后一个元素的 ID 相同
+      if (res.name && id == afterId) {
+        // 显示错误通知，提示该视频 ID 已存在于备选中的某个位置
+        ElNotification({
+          title: "番号检测",
+          message: afterId + "番号已存在与备选中;位置在" + (index + 1) + "号",
+          type: "error",
+        });
+      }
+    });
+  },
+  {
+    deep: true, // 深度监听 alternateArr.value 的变化
+  }
+);
+
+/**
+ * 计算并返回下载进度的百分比。
+ * 该计算属性不接受任何参数。
+ *
+ * @returns {Number} 返回下载进度的百分比。如果未开始下载或下载量为0，则返回0。
+ */
 const percentage = computed(() => {
+  // 如果下载后文件大小为0，直接返回0，表示没有下载进度
   if (storeData.value.downLoadAfter === 0) return 0;
+  // 计算下载进度的百分比，并保留两位小数
   return Number(
     (
       (storeData.value.downLoadAfter / storeData.value.downloadCount) *
@@ -241,17 +306,6 @@ const updateSpeedDownload = () => {
   speedDownload.value =
     Number(size.replace(/[KMGT]B/, "")) > 0 ? sizeName : "0.00B";
 
-  logData.speedEchart.setOption({
-    series: [
-      {
-        data: [
-          {
-            value: Number(size.replace(/[KMGT]B/, "")),
-          },
-        ],
-      },
-    ],
-  });
   oldSize = totalSize;
 };
 
@@ -305,7 +359,6 @@ const logData = reactive({
   isOnScroll: true, //是否自动滚动
   arr: [] as any[], //日志数组
   workerEchart: null as any, //echart图表
-  speedEchart: null as any, //速度图表
 });
 
 const getSystemLog = async () => {
@@ -342,7 +395,6 @@ await getSystemLog();
 
 onMounted(() => {
   logData.workerEchart = handleEchart(sizeForm.value, logData);
-  logData.speedEchart = handleSpeedEchart(logData);
 });
 
 onBeforeUnmount(async () => {
@@ -493,13 +545,22 @@ onBeforeUnmount(async () => {
           </button>
         </ElFormItem>
       </el-form>
-      <el-button
-        @click="addAlternate"
-        type="primary"
-        style="border-radius: 10px"
-      >
-        添加备选(备选内容会在下载完成后进行按顺序下载)
-      </el-button>
+      <div class="alternateTools">
+        <el-button
+          @click="addAlternate"
+          type="primary"
+          style="border-radius: 10px"
+        >
+          添加备选(备选内容会在下载完成后进行按顺序下载)
+        </el-button>
+        <el-button
+          @click="inspectAllId"
+          type="primary"
+          style="border-radius: 10px"
+        >
+          检查备选
+        </el-button>
+      </div>
       <div class="alternateList">
         <el-card
           shadow="never"
@@ -713,7 +774,11 @@ ul {
       }
     }
   }
-
+  .alternateTools {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: 1fr 1fr;
+  }
   .alternateList {
     overflow-y: scroll;
     .el-card {
