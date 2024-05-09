@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
 import { execFile } from "child_process";
-import { handleLog } from "./utils";
+import { handleLog } from "./utils.js";
 const ffmpeg = 'ffmpeg';  // 替换你的ffmpeg程序的完整路径，如果ffmpeg在环境变量中，直接写'ffmpeg'即可。
 
 //fs获取用户文档路径

@@ -165,8 +165,7 @@ export function quickSortByTimestamp(arr: any, key: string, isIncremental: boole
   }
 }
 
-
-const { exec } = require('child_process');
+import { exec } from 'child_process';
 
 
 //IDM版本
@@ -214,14 +213,16 @@ const { exec } = require('child_process');
 // }
 
 //aria2c版本
-export async function downloadM3U8(url, headers, outputPath, app): Promise<string> {
+export async function downloadM3U8(url, headers, outputPath, app, designation): Promise<string> {
   const downloadDir = outputPath + "\\data"
-
+  let isExistArr = false
   const dataDir = fs.readdirSync(downloadDir)
-  const isExistArr: boolean[] = []
   dataDir.forEach(async item => {
-    isExistArr.push(url.includes(item))
+    if (item.includes(designation)) {
+      return isExistArr = true
+    }
   })
+  console.log(`lzy  isExistArr:`, isExistArr)
   return new Promise(async (resolve, reject) => {
 
     await exec('aria2c --help', async (error, stdout, stderr) => {
@@ -270,8 +271,8 @@ export async function downloadM3U8(url, headers, outputPath, app): Promise<strin
       }
     });
 
-    if (!isExistArr.includes(true)) {
-      await aria2cDownload(url, headers, downloadDir)
+    if (!isExistArr) {
+      await aria2cDownload(url, headers, downloadDir, designation)
     }
 
     fs.readdir(downloadDir, (err, files) => {
@@ -303,14 +304,12 @@ export async function downloadM3U8(url, headers, outputPath, app): Promise<strin
 
 
 //使用aria2c下载
-export function aria2cDownload(url, headers, outputPath) {
+export function aria2cDownload(url, headers, outputPath, designation) {
   headers = '--header="Accept: */*" --header="accept-language: zh-CN,zh;q=0.9,en;q=0.8" --header="Referer: https://emturbovid.com/" --header="Referrer-Policy: strict-origin-when-cross-origin"'
   return new Promise((resolve, reject) => {
-    let o = ''
-    if (/video\.m3u8$/.test(url)) {
-      o = '-o ' + url.split('/')[3] + '.m3u8'
-    }
-    exec(`aria2c -d ${outputPath} ${o} ${headers} ${url}`, (error, stdout, stderr) => {
+    let o = designation + '.m3u8'
+    console.log(`aria2c -d ${outputPath}/${o} ${headers} ${url}`);
+    exec(`aria2c -d ${outputPath} -o ${o} ${headers} ${url}`, (error, stdout, stderr) => {
       if (error) {
         reject(error);
       }

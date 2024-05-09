@@ -3,9 +3,11 @@ import { onMounted, ref, reactive, watch } from "vue";
 import Plyr from "plyr";
 import { useRouter } from "vue-router";
 import LzyIcon from "@/components/LzyIcon.vue";
-import { ElMessageBox, ElMessage } from "element-plus";
-import { Videodatalist, listVideoHasObj } from "./Home";
-import { LzyAlert, LzyConfirm } from "@/utils";
+import { ElMessage } from "element-plus";
+import { Videodatalist } from "./Home";
+import type { listVideoHasObj } from "./Home";
+import { LzyAlert, LzyConfirm } from "@/utils/index";
+
 const {
   onHandleStoreData,
   onHandleOpenDir,
@@ -17,7 +19,7 @@ const {
 } = window.myElectron;
 
 onMounted(() => {
-  let player;
+  let player: any;
   try {
     player = new Plyr("#video", {
       disableContextMenu: false,
@@ -129,7 +131,13 @@ if (!dirPathArr.coverPath) {
 }
 
 //获取本地存储的数据
-const dirPath = reactive({
+const dirPath = reactive<{
+  [key: string]: { path: string; name: string; icon: string };
+  cover: { path: string; name: string; icon: string };
+  preview: { path: string; name: string; icon: string };
+  video: { path: string; name: string; icon: string };
+  videoDownload: { path: string; name: string; icon: string };
+}>({
   cover: {
     path: (await onHandleStoreData("coverPath")) || "",
     name: "封面文件夹地址",
@@ -232,7 +240,7 @@ async function configVideoListData() {
     videoDataList.value[0].name;
 }
 
-const deleteFile = (item, index) => {
+const deleteFile = (item: any, index: any) => {
   LzyConfirm({
     title: "温馨提示",
     content: "是否删除该视频",
@@ -255,7 +263,7 @@ const deleteFile = (item, index) => {
   });
 };
 //收藏视频
-const starVideo = async (item) => {
+const starVideo = async (item: Videodatalist) => {
   onHandleStarVideo(item.name);
   ElMessage({
     type: "success",

@@ -13,7 +13,6 @@ const fs = require("fs");
 */
 function getVideo(urlData, i, index, urlPrefix, headers, path, docPath) {
   return new Promise(async (resolve, reject) => {
-    const appPath = __dirname + `../../../electron/`
     let resa
     try {
       resa = await superagent.get(urlPrefix + urlData[i]).set(headers);

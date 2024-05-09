@@ -11,14 +11,12 @@ node_modules
 dist
 dist-ssr
 dist-electron
-build
+release
 *.local
+.vscode
 
 # Editor directories and files
 .vscode/*
-electron/data/*.json
-!.vscode/extensions.json
-package-lock.json
 .idea
 .DS_Store
 *.suo
@@ -26,5 +24,10 @@ package-lock.json
 *.njsproj
 *.sln
 *.sw?
-node_modules
+
+# lockfile
+package-lock.json
+pnpm-lock.yaml
 yarn.lock
+dist-electron/*
+dist-electron/main/index.js

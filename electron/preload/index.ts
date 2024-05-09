@@ -1,9 +1,6 @@
 import './handle'
 
 
-
-
-
 // ---------------------------------------------
 function domReady(condition: DocumentReadyState[] = ['complete', 'interactive']) {
   return new Promise((resolve) => {

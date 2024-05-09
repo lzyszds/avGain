@@ -8,12 +8,13 @@ import {
   createSystemStore, formatFileSize, quickSortByTimestamp, storeData, getStoreData,
   checkFileFoundError, getFolderSize, downloadM3U8,
   handleLog
-} from '../utils/utils'; // 假设您有一个名为 'utils' 的模块用于创建目录
+} from '../utils/utils';
 import { dayjs } from 'element-plus'
 import { Worker } from "worker_threads";
 import { merge } from '../utils/merge'
 import m3u8Parser from 'm3u8-parser'
 import URL from 'url';
+
 
 /**
  * @export
@@ -59,6 +60,7 @@ export class WindowManager {
     }
     //文档路径
     this.docPath = path.join(this.app.getPath('documents'), 'javPlayer')
+
 
     this.setLog = (msg: string) => handleLog.set(msg, this.docPath + '\\log.txt')
     // 注册事件监听
@@ -283,7 +285,7 @@ export class WindowManager {
     const that = this;
     return new Promise(async (resolve, reject) => {
       // 设置应用和文档路径。
-      const appPath = path.join(__dirname, `../../electron`);
+      const appPath = path.join(import.meta.url, `../../electron`);
 
       // 解构从前端进程传入的参数。
       let { resource, name, url, thread, downPath } = arg;
@@ -745,7 +747,7 @@ async function processM3u8(this: WindowManager, headers) {
 
   try {
     // 下载M3U8文件
-    const m3u8Data = await downloadM3U8(url, headers, this.docPath, this.app);
+    const m3u8Data = await downloadM3U8(url, headers, this.docPath, this.app, designation);
     // 解析M3U8文件
     const myParser = new m3u8Parser.Parser();
     myParser.push(m3u8Data);

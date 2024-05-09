@@ -1,19 +1,16 @@
 import { app, BrowserWindow, shell, ipcMain } from 'electron' // 引入electron模块
 import { release } from 'node:os' // 引入node:os模块中的release函数
-import { join } from 'node:path' // 引入node:path模块中的join函数
+import path, { join } from 'node:path' // 引入node:path模块中的join函数
 import remote from '@electron/remote/main' // 引入@electron/remote/main模块
-import { WindowManager } from './handle' // 引入./handle模块中的WindowManager类
-import { createSystemStore } from '../utils/utils'; // 引入../utils/utils模块中的mkdirsSync和createSystemStore函数
+import { WindowManager } from './handle.js' // 引入./handle模块中的WindowManager类
+import { createSystemStore } from '../utils/utils.js'; // 引入../utils/utils模块中的mkdirsSync和createSystemStore函数
+import { createRequire } from 'node:module'
+import { fileURLToPath } from 'node:url'
 
-//构建的目录结构
-// ├─┬ dist-electron
-// │ ├─┬ main
-// │ │ └── index.js    > Electron-Main
-// │ └─┬ preload
-// │   └── index.js    > Preload-Scripts
-// ├─┬ dist
-// │ └── index.html    > Electron-Renderer
-//
+
+const require = createRequire(import.meta.url)
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
 process.env.DIST_ELECTRON = join(__dirname, '..') // 设置环境变量DIST_ELECTRON为当前目录的上级目录
 process.env.DIST = join(process.env.DIST_ELECTRON, '../dist') // 设置环境变量DIST为DIST_ELECTRON的上级目录的dist目录
 process.env.PUBLIC = process.env.VITE_DEV_SERVER_URL
@@ -46,7 +43,7 @@ app.commandLine.appendSwitch('enable-experimental-web-platform-features', 'true'
 let win: BrowserWindow | null = null // 声明变量win，类型为BrowserWindow或null
 let loadingWindow: BrowserWindow | null = null
 //在这里，您还可以使用其他预加载
-const preload = join(__dirname, '../preload/index.js') // 设置preload变量为preload目录下的index.js文件的路径
+const preload = join(__dirname, '../preload/index.mjs') // 设置preload变量为preload目录下的index.js文件的路径
 const url = process.env.VITE_DEV_SERVER_URL // 设置url变量为环境变量VITE_DEV_SERVER_URL的值
 const indexHtml = join(process.env.DIST, 'index.html') // 设置indexHtml变量为DIST目录下的index.html文件的路径
 
@@ -80,7 +77,7 @@ async function createWindow() {
   })
 
   if (process.env.VITE_DEV_SERVER_URL) { // 如果环境变量VITE_DEV_SERVER_URL存在
-    win.loadURL(url) // 加载url
+    win.loadURL(url!) // 加载url
     // 如果应用程序未打包，请打开devTool
     // win.webContents.openDevTools() // 打开开发者工具
   } else {

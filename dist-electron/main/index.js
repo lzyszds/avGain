@@ -1,23 +1,24 @@
-"use strict";
 var __defProp = Object.defineProperty;
 var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
 var __publicField = (obj, key, value) => {
   __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
   return value;
 };
-const require$$3 = require("electron");
-const node_os = require("node:os");
-const path = require("node:path");
-const require$$0 = require("events");
-const fs = require("fs");
-const path$1 = require("path");
-const https = require("https");
-const sudo = require("sudo-prompt");
-const elementPlus = require("element-plus");
-const worker_threads = require("worker_threads");
-const child_process = require("child_process");
-const m3u8Parser = require("m3u8-parser");
-const URL = require("url");
+import require$$3, { dialog, shell, ipcMain, nativeTheme, app, BrowserWindow } from "electron";
+import { release } from "node:os";
+import path, { join } from "node:path";
+import require$$0 from "events";
+import fs from "fs";
+import path$1 from "path";
+import https from "https";
+import sudo from "sudo-prompt";
+import { exec, execFile } from "child_process";
+import { dayjs } from "element-plus";
+import { Worker } from "worker_threads";
+import m3u8Parser from "m3u8-parser";
+import URL from "url";
+import { createRequire } from "node:module";
+import { fileURLToPath } from "node:url";
 var commonjsGlobal = typeof globalThis !== "undefined" ? globalThis : typeof window !== "undefined" ? window : typeof global !== "undefined" ? global : typeof self !== "undefined" ? self : {};
 function getDefaultExportFromCjs(x) {
   return x && x.__esModule && Object.prototype.hasOwnProperty.call(x, "default") ? x["default"] : x;
@@ -224,7 +225,7 @@ const getElectronBinding = (name) => {
 };
 getElectronBinding$1.getElectronBinding = getElectronBinding;
 server.exports;
-(function(module2, exports) {
+(function(module, exports) {
   var __importDefault = commonjsGlobal && commonjsGlobal.__importDefault || function(mod) {
     return mod && mod.__esModule ? mod : { "default": mod };
   };
@@ -564,7 +565,7 @@ Remote event names: ${remoteEvents.join(", ")}`;
           if (process.mainModule) {
             customEvent.returnValue = process.mainModule.require(moduleName);
           } else {
-            let mainModule = module2;
+            let mainModule = module;
             while (mainModule.parent) {
               mainModule = mainModule.parent;
             }
@@ -725,14 +726,14 @@ function mkdirsSync(dirname) {
     }
   }
 }
-const createSystemStore = (app) => {
-  const systemStore = path.join(app.getPath("documents"), "javPlayer");
+const createSystemStore = (app2) => {
+  const systemStore = join(app2.getPath("documents"), "javPlayer");
   mkdirsSync(systemStore);
-  if (!fs.existsSync(path.join(systemStore, "data"))) {
-    mkdirsSync(path.join(systemStore, "data"));
+  if (!fs.existsSync(join(systemStore, "data"))) {
+    mkdirsSync(join(systemStore, "data"));
   }
-  if (!fs.existsSync(path.join(systemStore, "storeLog.json"))) {
-    fs.writeFileSync(path.join(systemStore, "storeLog.json"), `{
+  if (!fs.existsSync(join(systemStore, "storeLog.json"))) {
+    fs.writeFileSync(join(systemStore, "storeLog.json"), `{
       "coverPath": "",
       "previewPath": "",
       "videoPath": "",
@@ -742,9 +743,9 @@ const createSystemStore = (app) => {
   }
   return systemStore;
 };
-const storeData = (app, data) => {
-  const systemStore = path.join(app.getPath("documents"), "javPlayer");
-  const config = path.join(systemStore, "storeLog.json");
+const storeData = (app2, data) => {
+  const systemStore = join(app2.getPath("documents"), "javPlayer");
+  const config = join(systemStore, "storeLog.json");
   let dataStr = JSON.stringify(data);
   if (fs.existsSync(config)) {
     let oldData = fs.readFileSync(config, "utf-8");
@@ -753,9 +754,9 @@ const storeData = (app, data) => {
   }
   fs.writeFileSync(config, dataStr, "utf-8");
 };
-const getStoreData = (app) => {
-  const systemStore = path.join(app.getPath("documents"), "javPlayer");
-  const config = path.join(systemStore, "storeLog.json");
+const getStoreData = (app2) => {
+  const systemStore = join(app2.getPath("documents"), "javPlayer");
+  const config = join(systemStore, "storeLog.json");
   if (fs.existsSync(config)) {
     let data = fs.readFileSync(config, "utf-8");
     return JSON.parse(data);
@@ -836,18 +837,20 @@ function quickSortByTimestamp(arr, key, isIncremental = true) {
     return [...quickSortByTimestamp(greater, key, isIncremental), ...equal, ...quickSortByTimestamp(less, key, isIncremental)];
   }
 }
-const { exec } = require("child_process");
-async function downloadM3U8(url2, headers, outputPath, app) {
+async function downloadM3U8(url2, headers, outputPath, app2, designation) {
   const downloadDir = outputPath + "\\data";
+  let isExistArr = false;
   const dataDir = fs.readdirSync(downloadDir);
-  const isExistArr = [];
   dataDir.forEach(async (item) => {
-    isExistArr.push(url2.includes(item));
+    if (item.includes(designation)) {
+      return isExistArr = true;
+    }
   });
+  console.log(`lzy  isExistArr:`, isExistArr);
   return new Promise(async (resolve, reject) => {
     await exec("aria2c --help", async (error, stdout, stderr) => {
       if (error || stderr) {
-        const result = await require$$3.dialog.showMessageBox({
+        const result = await dialog.showMessageBox({
           type: "info",
           title: "提示",
           message: "aria2c不存在，请安装aria2c并配置环境变量",
@@ -856,9 +859,9 @@ async function downloadM3U8(url2, headers, outputPath, app) {
           defaultId: 0
         });
         if (result.response === 0) {
-          require$$3.shell.openExternal("https://github.com/aria2/aria2/releases/");
+          shell.openExternal("https://github.com/aria2/aria2/releases/");
         } else {
-          const res = await require$$3.dialog.showOpenDialog({
+          const res = await dialog.showOpenDialog({
             title: "选择aria2c安装路径",
             properties: ["openDirectory"]
           });
@@ -868,9 +871,9 @@ async function downloadM3U8(url2, headers, outputPath, app) {
               name: "AvGain"
             }, (error2, stdout2, stderr2) => {
               if (stderr2) {
-                require$$3.dialog.showErrorBox("错误", stderr2 + "");
+                dialog.showErrorBox("错误", stderr2 + "");
               }
-              require$$3.dialog.showMessageBox({
+              dialog.showMessageBox({
                 type: "info",
                 title: "提示",
                 message: "环境变量配置成功，请重启软件",
@@ -879,7 +882,7 @@ async function downloadM3U8(url2, headers, outputPath, app) {
                 defaultId: 0
               }).then((result2) => {
                 if (result2.response === 0) {
-                  app.relaunch();
+                  app2.relaunch();
                 }
               });
             });
@@ -887,8 +890,8 @@ async function downloadM3U8(url2, headers, outputPath, app) {
         }
       }
     });
-    if (!isExistArr.includes(true)) {
-      await aria2cDownload(url2, headers, downloadDir);
+    if (!isExistArr) {
+      await aria2cDownload(url2, headers, downloadDir, designation);
     }
     fs.readdir(downloadDir, (err, files) => {
       if (err) {
@@ -912,19 +915,17 @@ async function downloadM3U8(url2, headers, outputPath, app) {
     });
   });
 }
-function aria2cDownload(url2, headers, outputPath) {
+function aria2cDownload(url2, headers, outputPath, designation) {
   headers = '--header="Accept: */*" --header="accept-language: zh-CN,zh;q=0.9,en;q=0.8" --header="Referer: https://emturbovid.com/" --header="Referrer-Policy: strict-origin-when-cross-origin"';
   return new Promise((resolve, reject) => {
-    let o = "";
-    if (/video\.m3u8$/.test(url2)) {
-      o = "-o " + url2.split("/")[3] + ".m3u8";
-    }
-    exec(`aria2c -d ${outputPath} ${o} ${headers} ${url2}`, (error, stdout, stderr) => {
+    let o = designation + ".m3u8";
+    console.log(`aria2c -d ${outputPath}/${o} ${headers} ${url2}`);
+    exec(`aria2c -d ${outputPath} -o ${o} ${headers} ${url2}`, (error, stdout, stderr) => {
       if (error) {
         reject(error);
       }
       if (stderr) {
-        require$$3.dialog.showErrorBox("错误", stderr);
+        dialog.showErrorBox("错误", stderr);
         reject(stderr);
       }
       resolve(true);
@@ -997,7 +998,7 @@ function generateOptions(outputFile) {
 }
 function processQueue(options, cwd) {
   return new Promise((resolve, reject) => {
-    child_process.execFile(ffmpeg, options, { cwd, maxBuffer: 2048 * 2048 * 2048 }, (error, stdout, stderr) => {
+    execFile(ffmpeg, options, { cwd, maxBuffer: 2048 * 2048 * 2048 }, (error, stdout, stderr) => {
       if (error) {
         handleLog.set("合成失败" + error, logPath);
         console.log(`lzy  error:`, error);
@@ -1015,7 +1016,7 @@ class WindowManager {
    * @param {BrowserWindow} mainWindow
    * @memberof WindowManager
    */
-  constructor(win2, app, mainWindow) {
+  constructor(win2, app2, mainWindow) {
     __publicField(this, "win");
     __publicField(this, "app");
     __publicField(this, "mainWindow");
@@ -1039,7 +1040,7 @@ class WindowManager {
       //视频番号
     });
     this.win = win2;
-    this.app = app;
+    this.app = app2;
     this.mainWindow = mainWindow;
     this.workerArr = [];
     this.pathJson = {
@@ -1107,7 +1108,7 @@ class WindowManager {
   }
   // 注册 onHandleWin 事件监听
   registerHandleWin() {
-    require$$3.ipcMain.handle("onHandleWin", this.onHandleWin.bind(this));
+    ipcMain.handle("onHandleWin", this.onHandleWin.bind(this));
   }
   // 关闭窗口
   closeWindow() {
@@ -1131,11 +1132,11 @@ class WindowManager {
   }
   // 切换主题
   toggleTheme() {
-    require$$3.nativeTheme.themeSource = require$$3.nativeTheme.shouldUseDarkColors ? "light" : "dark";
+    nativeTheme.themeSource = nativeTheme.shouldUseDarkColors ? "light" : "dark";
   }
   //处理onHandleOpenDir事件
   async onHandleOpenDir(event, arg) {
-    const paths = require$$3.dialog.showOpenDialogSync(this.win, {
+    const paths = dialog.showOpenDialogSync(this.win, {
       title: "选择文件夹",
       properties: ["openDirectory"],
       modal: true
@@ -1150,7 +1151,7 @@ class WindowManager {
   }
   //注册onHandleOpenDir事件监听
   registerHandleOpenDir() {
-    require$$3.ipcMain.handle("onHandleOpenDir", this.onHandleOpenDir.bind(this));
+    ipcMain.handle("onHandleOpenDir", this.onHandleOpenDir.bind(this));
   }
   /**
    *  处理onHandleStoreData事件
@@ -1182,7 +1183,7 @@ class WindowManager {
   }
   //注册onHandleStoreData事件监听
   registerHandleStoreData() {
-    require$$3.ipcMain.handle("onHandleStoreData", this.onHandleStoreData.bind(this));
+    ipcMain.handle("onHandleStoreData", this.onHandleStoreData.bind(this));
   }
   //处理onGetListData事件
   async onGetListData(event, arg) {
@@ -1206,13 +1207,13 @@ class WindowManager {
         try {
           stat = fs.statSync(`${videoPath}/${name}.mp4`);
           datails = {
-            time: elementPlus.dayjs(stat.birthtimeMs).format("YYYY-MM-DD HH:mm"),
+            time: dayjs(stat.birthtimeMs).format("YYYY-MM-DD HH:mm"),
             size: formatFileSize(stat.size)
           };
         } catch (e) {
           stat = fs.statSync(`${coverPath}/${name}.jpg`);
           datails = {
-            time: elementPlus.dayjs(stat.birthtimeMs).format("YYYY-MM-DD HH:mm"),
+            time: dayjs(stat.birthtimeMs).format("YYYY-MM-DD HH:mm"),
             size: formatFileSize(stat.size)
           };
         }
@@ -1241,13 +1242,13 @@ class WindowManager {
   }
   //注册onGetListData事件监听
   registerGetListData() {
-    require$$3.ipcMain.handle("onGetListData", this.onGetListData.bind(this));
+    ipcMain.handle("onGetListData", this.onGetListData.bind(this));
   }
   // 处理在Electron应用中的视频下载事件的函数。
   onDownloadVideoEvent(event, arg) {
     const that = this;
     return new Promise(async (resolve, reject) => {
-      const appPath = path$1.join(__dirname, `../../electron`);
+      const appPath = path$1.join(import.meta.url, `../../electron`);
       let { resource, name, url: url2, thread, downPath } = arg;
       const headers = getHeaders(resource);
       const designation = getVideoId(name);
@@ -1273,7 +1274,7 @@ class WindowManager {
       });
       await terminateAllWorkers();
       for (let i = 0; i < thread; i++) {
-        const separateThread = new worker_threads.Worker(appPath + `\\seprate\\worker.js`);
+        const separateThread = new Worker(appPath + `\\seprate\\worker.js`);
         this.workerArr.push(separateThread);
         separateThread.postMessage({
           urlData: countArr[i],
@@ -1294,7 +1295,7 @@ class WindowManager {
   }
   //注册downloadVideoEvent事件监听
   registerDownloadVideoEvent() {
-    require$$3.ipcMain.handle("downloadVideoEvent", this.onDownloadVideoEvent.bind(this));
+    ipcMain.handle("downloadVideoEvent", this.onDownloadVideoEvent.bind(this));
   }
   //暂停下载
   onPauseDownloadEvent(event, arg) {
@@ -1305,7 +1306,7 @@ class WindowManager {
     this.setLog("🟡 下载任务已暂停<br/>");
   }
   registerPauseDownloadEvent() {
-    require$$3.ipcMain.handle("pauseDownloadEvent", this.onPauseDownloadEvent.bind(this));
+    ipcMain.handle("pauseDownloadEvent", this.onPauseDownloadEvent.bind(this));
   }
   //获取下载目录内容
   onGetDownloadListContent(event, arg) {
@@ -1315,14 +1316,14 @@ class WindowManager {
         return {
           state: getFolderSize(arg + "/" + file),
           name: file,
-          downloadTime: elementPlus.dayjs(fs.statSync(arg + "/" + file).birthtimeMs).format("X")
+          downloadTime: dayjs(fs.statSync(arg + "/" + file).birthtimeMs).format("X")
         };
       });
     }
     return arr;
   }
   registerGetDownloadListContent() {
-    require$$3.ipcMain.handle("getDownloadListContent", this.onGetDownloadListContent.bind(this));
+    ipcMain.handle("getDownloadListContent", this.onGetDownloadListContent.bind(this));
   }
   //清空文件夹内容 不删除父文件夹
   onDeleteDirFile(event, arg) {
@@ -1342,7 +1343,7 @@ class WindowManager {
     }
   }
   registerDeleteDirFile() {
-    require$$3.ipcMain.handle("deleteDirFile", this.onDeleteDirFile.bind(this));
+    ipcMain.handle("deleteDirFile", this.onDeleteDirFile.bind(this));
   }
   //处理逻辑deleteDirFile
   onCreateDir(event, arg) {
@@ -1351,7 +1352,7 @@ class WindowManager {
     }
   }
   registerCreateDir() {
-    require$$3.ipcMain.handle("onCreateDir", this.onCreateDir.bind(this));
+    ipcMain.handle("onCreateDir", this.onCreateDir.bind(this));
   }
   onHandleDeleteFile(event, arg) {
     const name = arg.split("/")[1].split(".mp4")[0];
@@ -1382,7 +1383,7 @@ class WindowManager {
     });
   }
   registerHandleDeleteFile() {
-    require$$3.ipcMain.handle("onHandleDeleteFile", this.onHandleDeleteFile.bind(this));
+    ipcMain.handle("onHandleDeleteFile", this.onHandleDeleteFile.bind(this));
   }
   //合并视频的逻辑
   async onMergeVideo(event, arg) {
@@ -1413,15 +1414,15 @@ class WindowManager {
     }
   }
   registeronMergeVideo() {
-    require$$3.ipcMain.handle("onMergeVideo", this.onMergeVideo.bind(this));
+    ipcMain.handle("onMergeVideo", this.onMergeVideo.bind(this));
   }
   //打开文件夹
   onOpenDir(event, arg) {
-    const { shell } = require("electron");
-    shell.showItemInFolder(arg);
+    const { shell: shell2 } = require("electron");
+    shell2.showItemInFolder(arg);
   }
   registerOpenDir() {
-    require$$3.ipcMain.handle("onOpenDir", this.onOpenDir.bind(this));
+    ipcMain.handle("onOpenDir", this.onOpenDir.bind(this));
   }
   //收藏视频
   onHandleStarVideo(event, arg) {
@@ -1445,7 +1446,7 @@ class WindowManager {
     })), "utf-8");
   }
   registerHandleStarVideo() {
-    require$$3.ipcMain.handle("onHandleStarVideo", this.onHandleStarVideo.bind(this));
+    ipcMain.handle("onHandleStarVideo", this.onHandleStarVideo.bind(this));
   }
   //获取当前所有的文件夹配置路径
   onGetAllDirPath(event, arg) {
@@ -1469,7 +1470,7 @@ class WindowManager {
     return this.pathJson;
   }
   registerGetAllDirPath() {
-    require$$3.ipcMain.handle("onGetAllDirPath", this.onGetAllDirPath.bind(this));
+    ipcMain.handle("onGetAllDirPath", this.onGetAllDirPath.bind(this));
   }
   //当添加页面初始进来时，发送下载的进度和总数回去
   onGetDownloadProgress(event, arg) {
@@ -1487,7 +1488,7 @@ class WindowManager {
     return storeData2;
   }
   registerGetDownloadProgress() {
-    require$$3.ipcMain.handle("onGetDownloadProgress", this.onGetDownloadProgress.bind(this));
+    ipcMain.handle("onGetDownloadProgress", this.onGetDownloadProgress.bind(this));
   }
   //获取系统日志
   onGetSystemLog(event, arg) {
@@ -1500,7 +1501,7 @@ class WindowManager {
     }
   }
   registerGetSystemLog() {
-    require$$3.ipcMain.handle("onGetSystemLog", this.onGetSystemLog.bind(this));
+    ipcMain.handle("onGetSystemLog", this.onGetSystemLog.bind(this));
   }
   //清空系统日志
   onClearSystemLog(event, arg) {
@@ -1513,7 +1514,7 @@ class WindowManager {
     }
   }
   registerClearSystemLog() {
-    require$$3.ipcMain.handle("onClearSystemLog", this.onClearSystemLog.bind(this));
+    ipcMain.handle("onClearSystemLog", this.onClearSystemLog.bind(this));
   }
   getPreviewVideo(id, name, getCoverIndex, previewPath, coverPath) {
     return new Promise((resolve, reject) => {
@@ -1593,7 +1594,7 @@ function sanitizeVideoName(name) {
 async function processM3u8(headers) {
   const { url: url2, designation } = this.downLoadConfig;
   try {
-    const m3u8Data = await downloadM3U8(url2, headers, this.docPath, this.app);
+    const m3u8Data = await downloadM3U8(url2, headers, this.docPath, this.app, designation);
     const myParser = new m3u8Parser.Parser();
     myParser.push(m3u8Data);
     myParser.end();
@@ -1616,28 +1617,30 @@ async function processM3u8(headers) {
     return { dataArr: [], dataCount: 0 };
   }
 }
-process.env.DIST_ELECTRON = path.join(__dirname, "..");
-process.env.DIST = path.join(process.env.DIST_ELECTRON, "../dist");
-process.env.PUBLIC = process.env.VITE_DEV_SERVER_URL ? path.join(process.env.DIST_ELECTRON, "../public") : process.env.DIST;
-global.appRootPath = path.join(__dirname, "../../");
-if (node_os.release().startsWith("6.1"))
-  require$$3.app.disableHardwareAcceleration();
+createRequire(import.meta.url);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+process.env.DIST_ELECTRON = join(__dirname, "..");
+process.env.DIST = join(process.env.DIST_ELECTRON, "../dist");
+process.env.PUBLIC = process.env.VITE_DEV_SERVER_URL ? join(process.env.DIST_ELECTRON, "../public") : process.env.DIST;
+global.appRootPath = join(__dirname, "../../");
+if (release().startsWith("6.1"))
+  app.disableHardwareAcceleration();
 if (process.platform === "win32")
-  require$$3.app.setAppUserModelId(require$$3.app.getName());
-if (!require$$3.app.requestSingleInstanceLock()) {
-  require$$3.app.quit();
+  app.setAppUserModelId(app.getName());
+if (!app.requestSingleInstanceLock()) {
+  app.quit();
   process.exit(0);
 }
-require$$3.app.commandLine.appendSwitch("enable-experimental-web-platform-features", "true");
+app.commandLine.appendSwitch("enable-experimental-web-platform-features", "true");
 let win = null;
 let loadingWindow = null;
-const preload = path.join(__dirname, "../preload/index.js");
+const preload = join(__dirname, "../preload/index.mjs");
 const url = process.env.VITE_DEV_SERVER_URL;
-const indexHtml = path.join(process.env.DIST, "index.html");
-createSystemStore(require$$3.app);
+const indexHtml = join(process.env.DIST, "index.html");
+createSystemStore(app);
 remote.initialize();
 async function createWindow() {
-  win = new require$$3.BrowserWindow({
+  win = new BrowserWindow({
     width: 1800,
     height: 1e3,
     minWidth: 1260,
@@ -1649,7 +1652,7 @@ async function createWindow() {
     // 先不显示
     frame: false,
     //隐藏窗口标题栏
-    icon: path.join(process.env.PUBLIC, "logo.png"),
+    icon: join(process.env.PUBLIC, "logo.png"),
     webPreferences: {
       devTools: true,
       preload,
@@ -1671,17 +1674,17 @@ async function createWindow() {
   });
   win.webContents.setWindowOpenHandler(({ url: url2 }) => {
     if (url2.startsWith("https:"))
-      require$$3.shell.openExternal(url2);
+      shell.openExternal(url2);
     return { action: "deny" };
   });
   remote.enable(win.webContents);
   return win;
 }
-require$$3.app.whenReady().then(async () => {
+app.whenReady().then(async () => {
   createLoadingWindow();
   setTimeout(async () => {
     const mainWindow = await createWindow();
-    new WindowManager(win, require$$3.app, mainWindow);
+    new WindowManager(win, app, mainWindow);
     loadingWindow == null ? void 0 : loadingWindow.close();
     mainWindow.webContents.on("did-finish-load", (event, args) => {
       mainWindow.webContents.setZoomFactor(1);
@@ -1689,28 +1692,28 @@ require$$3.app.whenReady().then(async () => {
     });
   }, 2e3);
 });
-require$$3.app.on("window-all-closed", () => {
+app.on("window-all-closed", () => {
   win = null;
   if (process.platform !== "darwin")
-    require$$3.app.quit();
+    app.quit();
 });
-require$$3.app.on("second-instance", () => {
+app.on("second-instance", () => {
   if (win) {
     if (win.isMinimized())
       win.restore();
     win.focus();
   }
 });
-require$$3.app.on("activate", () => {
-  const allWindows = require$$3.BrowserWindow.getAllWindows();
+app.on("activate", () => {
+  const allWindows = BrowserWindow.getAllWindows();
   if (allWindows.length) {
     allWindows[0].focus();
   } else {
     createWindow();
   }
 });
-require$$3.ipcMain.handle("open-win", (_, arg) => {
-  const childWindow = new require$$3.BrowserWindow({
+ipcMain.handle("open-win", (_, arg) => {
+  const childWindow = new BrowserWindow({
     webPreferences: {
       preload,
       nodeIntegration: true,
@@ -1724,7 +1727,7 @@ require$$3.ipcMain.handle("open-win", (_, arg) => {
   }
 });
 function createLoadingWindow() {
-  loadingWindow = new require$$3.BrowserWindow({
+  loadingWindow = new BrowserWindow({
     width: 1e3,
     // 设置窗口宽度为400
     height: 600,
@@ -1737,16 +1740,16 @@ function createLoadingWindow() {
     // 窗口透明
     resizable: false,
     // 窗口不可调整大小
-    icon: path.join(process.env.PUBLIC, "logo.png"),
+    icon: join(process.env.PUBLIC, "logo.png"),
     webPreferences: {
       experimentalFeatures: true,
       // 启用实验性特性
       // 根据环境设置preload路径
-      preload: process.env.NODE_ENV === "development" ? path.join(require$$3.app.getAppPath(), "preload.js") : path.join(require$$3.app.getAppPath(), "dist/electron/main/preload.js")
+      preload: process.env.NODE_ENV === "development" ? join(app.getAppPath(), "preload.js") : join(app.getAppPath(), "dist/electron/main/preload.js")
       // 生产环境下的preload路径
     }
   });
-  loadingWindow.loadFile(path.join(global.appRootPath, "/loader.html"));
+  loadingWindow.loadFile(join(global.appRootPath, "/loader.html"));
   loadingWindow.on("closed", () => {
     loadingWindow = null;
   });

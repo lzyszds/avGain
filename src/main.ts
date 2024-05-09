@@ -23,5 +23,9 @@ createApp(App)
   .component('LzyBtn', LzyBtn)
   .use(router).use(ElementPlus).use(VueJsTour)
   .mount('#app')
+  //关闭loading
+  .$nextTick(() => {
+    postMessage({ payload: 'removeLoading' }, '*')
+  })
 
 
