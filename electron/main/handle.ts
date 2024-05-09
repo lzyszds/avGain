@@ -1,4 +1,4 @@
-import { ipcMain, dialog, nativeTheme, BrowserWindow, OpenDialogSyncOptions } from 'electron';
+import { ipcMain, dialog, nativeTheme, BrowserWindow, OpenDialogSyncOptions, shell } from 'electron';
 import type { App } from 'electron';
 import fs from 'fs';
 import path from 'path';
@@ -14,7 +14,6 @@ import { Worker } from "worker_threads";
 import { merge } from '../utils/merge'
 import m3u8Parser from 'm3u8-parser'
 import URL from 'url';
-
 
 /**
  * @export
@@ -32,6 +31,7 @@ export class WindowManager {
   };  // 下载配置路径
   public workerArr: Worker[]; // 线程池
   public docPath: string;  //文档路径
+  public appPath: string;  //应用路径
   public setLog: (msg: string) => void // 日志
   public taskArray: number[] = [] //任务id
   public downLoadConfig = { //下载任务的配置
@@ -51,6 +51,7 @@ export class WindowManager {
     this.win = win;
     this.app = app;
     this.mainWindow = mainWindow
+    this.appPath = app.getAppPath()
     this.workerArr = []
     this.pathJson = {
       coverPath: '',
@@ -284,9 +285,6 @@ export class WindowManager {
   private onDownloadVideoEvent(event: Electron.IpcMainInvokeEvent, arg: any) {
     const that = this;
     return new Promise(async (resolve, reject) => {
-      // 设置应用和文档路径。
-      const appPath = path.join(import.meta.url, `../../electron`);
-
       // 解构从前端进程传入的参数。
       let { resource, name, url, thread, downPath } = arg;
       // 获取HTTP请求头信息。
@@ -327,8 +325,9 @@ export class WindowManager {
       })
 
       await terminateAllWorkers();
+
       for (let i = 0; i < thread; i++) {
-        const separateThread = new Worker(appPath + `\\seprate\\worker.js`);
+        const separateThread = new Worker(that.appPath + `\\electron\\seprate\\worker.js`);
         this.workerArr.push(separateThread);
         // 创建一个新的Worker线程实例，用于处理下载任务。
         // 向Worker线程发送任务信息，启动下载。
@@ -337,7 +336,7 @@ export class WindowManager {
           index: i + 1,
           headers: headers,
           downPath: downPath,
-          docPath: that.docPath
+          docPath: that.docPath,
         });
       }
     });
@@ -504,7 +503,6 @@ export class WindowManager {
 
   //打开文件夹
   private onOpenDir(event: Electron.IpcMainInvokeEvent, arg: any) {
-    const { shell } = require('electron')
     shell.showItemInFolder(arg)
   }
   private registerOpenDir(): void {
@@ -747,7 +745,7 @@ async function processM3u8(this: WindowManager, headers) {
 
   try {
     // 下载M3U8文件
-    const m3u8Data = await downloadM3U8(url, headers, this.docPath, this.app, designation);
+    const m3u8Data = await downloadM3U8.bind(this)();
     // 解析M3U8文件
     const myParser = new m3u8Parser.Parser();
     myParser.push(m3u8Data);

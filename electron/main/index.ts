@@ -7,7 +7,6 @@ import { createSystemStore } from '../utils/utils.js'; // 引入../utils/utils�
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
-
 const require = createRequire(import.meta.url)
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -183,3 +182,4 @@ function createLoadingWindow() {
     loadingWindow = null;
   });
 }
+export default win // 导出win和loadingWindow变量

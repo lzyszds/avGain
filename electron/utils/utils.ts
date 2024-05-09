@@ -2,6 +2,7 @@ import { shell, dialog, Notification } from 'electron';
 import fs from 'fs'
 import path, { join } from 'node:path'
 import sudo from 'sudo-prompt'
+import { download, CancelError } from 'electron-dl';
 
 //存储文件时先判断当前路径是否存在文件夹，不存在先创建
 export function mkdirsSync(dirname) {
@@ -212,9 +213,10 @@ import { exec } from 'child_process';
 
 // }
 
-//aria2c版本
-export async function downloadM3U8(url, headers, outputPath, app, designation): Promise<string> {
-  const downloadDir = outputPath + "\\data"
+export async function downloadM3U8(): Promise<string> {
+  const { designation } = this.downLoadConfig;
+  const that = this
+  const downloadDir = that.docPath + "\\data"
   let isExistArr = false
   const dataDir = fs.readdirSync(downloadDir)
   dataDir.forEach(async item => {
@@ -222,57 +224,9 @@ export async function downloadM3U8(url, headers, outputPath, app, designation): 
       return isExistArr = true
     }
   })
-  console.log(`lzy  isExistArr:`, isExistArr)
   return new Promise(async (resolve, reject) => {
-
-    await exec('aria2c --help', async (error, stdout, stderr) => {
-      if (error || stderr) {
-        //提醒用户安装aria2c 并跳转到下载页面
-        const result = await dialog.showMessageBox({
-          type: 'info',
-          title: '提示',
-          message: 'aria2c不存在，请安装aria2c并配置环境变量',
-          buttons: ['前往下载', '已安装进行环境配置'],
-          cancelId: 0,
-          defaultId: 0,
-        })
-
-        if (result.response === 0) {
-          shell.openExternal('https://github.com/aria2/aria2/releases/')
-        } else {
-          //选择安装路径 新增至环境变量中
-          const res = await dialog.showOpenDialog({
-            title: '选择aria2c安装路径',
-            properties: ['openDirectory'],
-          })
-          if (!res.canceled) {
-            const path = res.filePaths
-            sudo.exec(`setx /M PATH "%PATH%;${path}"`, {
-              name: 'AvGain'
-            }, (error, stdout, stderr) => {
-              if (stderr) {
-                dialog.showErrorBox('错误', stderr + "")
-              }
-              dialog.showMessageBox({
-                type: 'info',
-                title: '提示',
-                message: '环境变量配置成功，请重启软件',
-                buttons: ['确定'],
-                cancelId: 0,
-                defaultId: 0,
-              }).then(result => {
-                if (result.response === 0) {
-                  app.relaunch()
-                }
-              })
-            })
-          }
-        }
-      }
-    });
-
     if (!isExistArr) {
-      await aria2cDownload(url, headers, downloadDir, designation)
+      await handelLzyDownload.bind(that)(downloadDir)
     }
 
     fs.readdir(downloadDir, (err, files) => {
@@ -282,7 +236,7 @@ export async function downloadM3U8(url, headers, outputPath, app, designation): 
         const fileInfos: any[] = []
         //根据时间获取最新的文件内容
         files.forEach((file, index) => {
-          const fileInfo = fs.statSync(outputPath + "\\data\\" + file)
+          const fileInfo = fs.statSync(that.docPath + "\\data\\" + file)
           if (fileInfo.isFile()) {
             fileInfos.push({
               name: file,
@@ -293,13 +247,23 @@ export async function downloadM3U8(url, headers, outputPath, app, designation): 
 
         //返回时间最大的文件
         const fileInfo = quickSortByTimestamp(fileInfos, 'time', false)[0]
-        const res = fs.readFileSync(outputPath + "\\data\\" + fileInfo.name, "utf-8")
+        const res = fs.readFileSync(that.docPath + "\\data\\" + fileInfo.name, "utf-8")
         //通过日志提醒用户下载完成m3u8文件
-        handleLog.set("📋 m3u8文件下载完成，准备开始下载视频 <br/>", outputPath + '\\log.txt')
+        handleLog.set("📋 m3u8文件下载完成，准备开始下载视频 <br/>", that.docPath + '\\log.txt')
         resolve(res)
       }
     });
   });
+}
+
+//使用lzyDownload下载
+export async function handelLzyDownload(downloadDir) {
+  const { url, designation } = this.downLoadConfig;
+  await lzyDownload(this.win, {
+    url: url,
+    filename: designation + '.m3u8',
+    directory: downloadDir
+  })
 }
 
 
@@ -308,7 +272,6 @@ export function aria2cDownload(url, headers, outputPath, designation) {
   headers = '--header="Accept: */*" --header="accept-language: zh-CN,zh;q=0.9,en;q=0.8" --header="Referer: https://emturbovid.com/" --header="Referrer-Policy: strict-origin-when-cross-origin"'
   return new Promise((resolve, reject) => {
     let o = designation + '.m3u8'
-    console.log(`aria2c -d ${outputPath}/${o} ${headers} ${url}`);
     exec(`aria2c -d ${outputPath} -o ${o} ${headers} ${url}`, (error, stdout, stderr) => {
       if (error) {
         reject(error);
@@ -363,4 +326,75 @@ export const handleLog = {
   clear: (path) => {
     fs.writeFileSync(path, '', 'utf-8')
   }
+}
+
+
+export async function lzyDownload(win, options: {
+  url: string,
+  directory?: string,
+  filename?: string,
+}) {
+  try {
+    await download(win, options.url, {
+      directory: options.directory,
+      filename: options.filename,
+    })
+  } catch (error) {
+    if (error instanceof CancelError) {
+      console.info('item.cancel() was called');
+    } else {
+      console.error(error);
+    }
+  }
+}
+
+
+
+//检查是否安装了aria2c 检查环境变量
+export async function inspectEnv(app: any) {
+  await exec('aria2c --help', async (error, stdout, stderr) => {
+    if (error || stderr) {
+      //提醒用户安装aria2c 并跳转到下载页面
+      const result = await dialog.showMessageBox({
+        type: 'info',
+        title: '提示',
+        message: 'aria2c不存在，请安装aria2c并配置环境变量',
+        buttons: ['前往下载', '已安装进行环境配置'],
+        cancelId: 0,
+        defaultId: 0,
+      })
+
+      if (result.response === 0) {
+        shell.openExternal('https://github.com/aria2/aria2/releases/')
+      } else {
+        //选择安装路径 新增至环境变量中
+        const res = await dialog.showOpenDialog({
+          title: '选择aria2c安装路径',
+          properties: ['openDirectory'],
+        })
+        if (!res.canceled) {
+          const path = res.filePaths
+          sudo.exec(`setx /M PATH "%PATH%;${path}"`, {
+            name: 'AvGain'
+          }, (error, stdout, stderr) => {
+            if (stderr) {
+              dialog.showErrorBox('错误', stderr + "")
+            }
+            dialog.showMessageBox({
+              type: 'info',
+              title: '提示',
+              message: '环境变量配置成功，请重启软件',
+              buttons: ['确定'],
+              cancelId: 0,
+              defaultId: 0,
+            }).then(result => {
+              if (result.response === 0) {
+                app.relaunch()
+              }
+            })
+          })
+        }
+      }
+    }
+  });
 }

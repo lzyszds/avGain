@@ -161,7 +161,7 @@ const dirPath = reactive<{
 });
 
 //获取文件夹路径 并存储到本地
-const getDirPath = async (type: string) => {
+const getDirPath = async (type: string | number) => {
   dirPath[type].path = (await onHandleOpenDir()) || dirPath[type].path;
 };
 // 将目录路径保存到存储

@@ -1,5 +1,5 @@
-const superagent = require("superagent");
-const fs = require("fs");
+import fs from 'fs';
+import superagent from 'superagent';
 
 // 封装递归方法
 /* 
@@ -62,7 +62,7 @@ function getVideo(urlData, i, index, headers, path, docPath) {
     });
   })
 }
-module.exports = getVideo;
+export default getVideo;
 
 const requestWithRetryLocal = async (url, headers, path, docPath, name, index) => {
   handleLog.set(`🟢 正在下载：${name} ${index}线程 <br/>`, docPath + '/log.txt')

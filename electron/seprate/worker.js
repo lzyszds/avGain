@@ -1,6 +1,5 @@
-
-const { parentPort } = require("worker_threads");
-const getVideo = require("./getVideo.js");
+import { parentPort } from 'worker_threads';
+import getVideo from "./getVideo.js"
 parentPort.on("message", (limit) => {
   const { urlData, index, headers, downPath, docPath } = limit;
   if (!urlData) {
