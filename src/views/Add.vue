@@ -29,7 +29,7 @@ const rawData = await el.onHandleStoreData("downloadHistory");
 const downloadHistory = ref(JSON.parse(rawData || "[]"));
 
 //将历史记录里面的空数据删除
-downloadHistory.value = downloadHistory.value.filter((res) => res.name);
+downloadHistory.value = downloadHistory.value.filter((res: any) => res.name);
 
 const sizeForm = useStorage("sizeForm", {
   resource: "SuperJav", //来源
@@ -39,6 +39,22 @@ const sizeForm = useStorage("sizeForm", {
   isAutoTask: true, //是否开启自动替换任务
   outTimer: 10, //超时重下时间
 });
+const codeValue = reactive({
+  value: "",
+  isShow: false,
+});
+
+const onInspectId = async () => {
+  if (!codeValue.value) return;
+  codeValue.value = codeValue.value.toUpperCase().replace(/ /g, "");
+  //如果存在番号，则将isShow设置为true
+  codeValue.isShow = await el.onInspectId(codeValue.value);
+  ElNotification({
+    title: "番号检测",
+    message: codeValue.isShow ? "番号已存在" : "番号不存在",
+    type: codeValue.isShow ? "error" : "success",
+  });
+};
 
 //获取本地存储中的下载进度
 const storeData = ref(await el.onGetDownloadProgress(sizeForm.value.name));
@@ -65,7 +81,7 @@ const isStartDown = ref(false);
 //历史记录当前页数
 const newPage = ref(1);
 
-let timer;
+let timer: any;
 
 //下载时间计时器
 const counter = ref(0);
@@ -414,6 +430,12 @@ onBeforeUnmount(async () => {
           <el-radio-group v-model="sizeForm.resource">
             <el-radio border label="SuperJav" />
             <el-radio border label="MissJav" />
+            <el-input
+              v-model="codeValue.value"
+              placeholder="输入番号检测"
+              style="display: inline; width: 30%"
+              @keyup.enter="onInspectId"
+            />
           </el-radio-group>
         </el-form-item>
         <el-form-item label="番号名字">

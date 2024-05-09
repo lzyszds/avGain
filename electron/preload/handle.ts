@@ -36,7 +36,9 @@ const validChannels = [
   // 获取系统日志
   'onGetSystemLog',
   //清空系统日志
-  'onClearSystemLog'
+  'onClearSystemLog',
+  //查询番号是否存在
+  'onInspectId'
 ]
 
 const myElectron = {}

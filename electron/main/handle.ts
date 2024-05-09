@@ -82,6 +82,7 @@ export class WindowManager {
     this.registerGetDownloadProgress()//获取当前所有的视频路径
     this.registerGetSystemLog()//获取系统日志
     this.registerClearSystemLog()//清空系统日志
+    this.registerOnInspectId()//检查是否存在当前视频
   }
 
   // 处理窗口操作请求
@@ -660,7 +661,20 @@ export class WindowManager {
         that.setLog(`🔴 (即将重试)下载出错: ${error} <br/>`)
       });
     })
+  }
+  private onInspectId(event: Electron.IpcMainInvokeEvent, arg: any) {
+    return new Promise<boolean>((resolve, reject) => {
+      fs.readdirSync(this.pathJson.coverPath).forEach((file) => {
+        if (file.includes(arg)) {
+          resolve(true)
+        }
+      })
+      resolve(false)
+    })
+  }
 
+  private registerOnInspectId(): void {
+    ipcMain.handle('onInspectId', this.onInspectId.bind(this));
   }
 }
 
