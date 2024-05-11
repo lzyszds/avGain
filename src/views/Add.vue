@@ -88,9 +88,14 @@ watch(
   () => alternateArr.value,
   (val) => {
     // 过滤掉没有 name 属性的项
-    const arr = val.filter((res) => res.name);
+    const arr = val.filter((res) => {
+      if (res.name) {
+        return res;
+      }
+    });
     // 获取过滤后数组的最后一个元素
     const afterValue = arr[arr.length - 1];
+    if (!afterValue) return;
     // 根据最后一个元素的 name 获取视频 ID
     const afterId = getVideoId(afterValue.name)!;
     // 如果无法获取到 ID，则直接返回

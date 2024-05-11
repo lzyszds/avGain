@@ -16,6 +16,7 @@ const {
   onHandleDeleteFile,
   onHandleStarVideo,
   onGetAllDirPath,
+  onRepairCover,
 } = window.myElectron;
 
 onMounted(() => {
@@ -104,9 +105,11 @@ const toolHandle = [
     },
   },
   {
-    tipsContent: "切换模式",
-    icon: "basil:exchange-solid",
-    handle: () => {},
+    tipsContent: "修复封面",
+    icon: "basil:slack-outline",
+    handle: () => {
+      onRepairCover();
+    },
   },
   {
     tipsContent: "目录列表",
@@ -330,7 +333,7 @@ const starVideo = async (item: Videodatalist) => {
               muted
               :src="item.preview"
             ></video>
-            <img v-else :src="item.cover" alt="" />
+            <img v-lazy v-else :src="item.cover" alt="" />
             <h4>
               {{ item.name }}
             </h4>

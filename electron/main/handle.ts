@@ -83,6 +83,8 @@ export class WindowManager {
     this.registerGetSystemLog()//获取系统日志
     this.registerClearSystemLog()//清空系统日志
     this.registerOnInspectId()//检查是否存在当前视频
+    this.registerRepairCover()//修复封面和预览
+
   }
 
   // 处理窗口操作请求
@@ -483,7 +485,7 @@ export class WindowManager {
 
     const resulted = await merge(newname, downloadPath + `/${designation}`, videoPath)
     if (resulted === '合成成功') {
-      // 如果所有线程完成下载，尝试合并视频片段。
+      //视频合并成功后，下载封面和预览视频
       await this.getPreviewVideo(designation, newname, getCoverIndex, previewPath, coverPath)
       //删除下载的视频片段
       fs.rm(downloadPath + `/${designation}`, { recursive: true }, (err) => {
@@ -676,6 +678,21 @@ export class WindowManager {
   private registerOnInspectId(): void {
     ipcMain.handle('onInspectId', this.onInspectId.bind(this));
   }
+
+  private onRepairCover(event: Electron.IpcMainInvokeEvent, arg: any) {
+    const { coverPath, previewPath } = this.pathJson
+    fs.readdirSync(coverPath).forEach((file) => {
+      const stat = fs.statSync(`${coverPath}/${file}`)
+      if (stat.size > 1000) return
+      const name = file.split('.jpg')[0]
+      const designation = getVideoId(name)
+      this.getPreviewVideo(designation, name, 0, previewPath, coverPath)
+    })
+
+  }
+  private registerRepairCover(): void {
+    ipcMain.handle('onRepairCover', this.onRepairCover.bind(this));
+  }
 }
 
 
@@ -705,8 +722,9 @@ function getHeaders(resource) {
 function getVideoId(val: string) {
   let reg = /[a-zA-Z]{2,6}-\d{3,4}/
   //使用正则
-  const result = val.match(reg)
-  return result ? val.split(' ')[0].replace('[无码破解]', "") : null
+  let result = val.match(reg)
+  if (typeof result === 'string') return result ? val.split(' ')[0].replace('[无码破解]', "") : null
+  return result ? result[0] : null
 }
 
 //将数组拆分为相等的块

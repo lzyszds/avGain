@@ -9,7 +9,8 @@ declare global {
   interface Window {
     myElectron: any;
     ipcRenderer: any;
-    player: any
+    player: any,
+    lzyLazyImg: string
   }
 }
 

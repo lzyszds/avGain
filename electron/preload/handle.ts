@@ -38,7 +38,9 @@ const validChannels = [
   //清空系统日志
   'onClearSystemLog',
   //查询番号是否存在
-  'onInspectId'
+  'onInspectId',
+  //修复封面和预览
+  'onRepairCover',
 ]
 
 const myElectron = {}

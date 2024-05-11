@@ -268,11 +268,16 @@ export async function handelLzyDownload(downloadDir) {
 
 
 //使用aria2c下载
-export function aria2cDownload(url, headers, outputPath, designation) {
-  headers = '--header="Accept: */*" --header="accept-language: zh-CN,zh;q=0.9,en;q=0.8" --header="Referer: https://emturbovid.com/" --header="Referrer-Policy: strict-origin-when-cross-origin"'
+export function aria2cDownload(option: {
+  url: string,
+  directory: string,
+  filename: string
+}) {
+  const { url, directory, filename } = option
+  const headers = '--header="Accept: */*" --header="accept-language: zh-CN,zh;q=0.9,en;q=0.8" --header="Referer: https://emturbovid.com/" --header="Referrer-Policy: strict-origin-when-cross-origin"'
   return new Promise((resolve, reject) => {
-    let o = designation + '.m3u8'
-    exec(`aria2c -d ${outputPath} -o ${o} ${headers} ${url}`, (error, stdout, stderr) => {
+    let o = filename + '.m3u8'
+    exec(`aria2c -d ${directory} -o ${o} ${headers} ${url}`, (error, stdout, stderr) => {
       if (error) {
         reject(error);
       }
@@ -329,10 +334,16 @@ export const handleLog = {
 }
 
 
+/**
+ *  使用lzyDownload下载
+ * @param win
+ * @param options url: 下载地址 directory: 下载路径 filename: 下载文件名(番号)
+ * return Promise
+  */
 export async function lzyDownload(win, options: {
   url: string,
-  directory?: string,
-  filename?: string,
+  directory: string,
+  filename: string,
 }) {
   try {
     await download(win, options.url, {
@@ -341,10 +352,13 @@ export async function lzyDownload(win, options: {
     })
   } catch (error) {
     if (error instanceof CancelError) {
-      console.info('item.cancel() was called');
-    } else {
-      console.error(error);
+      return console.info('item.cancel() was called');
     }
+    console.error(error);
+    handleLog.set(options.filename + '下载失败,即将更换aria2c下载', join(options.directory, 'log.txt'))
+    // 更换下载方式
+    await aria2cDownload(options)
+
   }
 }
 

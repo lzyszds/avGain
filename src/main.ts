@@ -5,6 +5,7 @@ import '@/assets/style/plyr.css'
 import '@/assets/style/elementLzy.scss'
 import '@/assets/font/font.css'
 import '@/assets/style/animate.min.css'
+import imglazy from '@/utils/lazy';
 
 
 import LzyIcon from '@/components/LzyIcon.vue';
@@ -22,6 +23,7 @@ createApp(App)
   .component('LzyIcon', LzyIcon)
   .component('LzyBtn', LzyBtn)
   .use(router).use(ElementPlus).use(VueJsTour)
+  .directive('lazy', imglazy)
   .mount('#app')
   //关闭loading
   .$nextTick(() => {
