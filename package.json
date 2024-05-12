@@ -1,6 +1,6 @@
 {
   "name": "av-gain",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "main": "dist-electron/main/index.js",
   "description": "av爬取软件",
   "author": "lzyszds@qq.com",
