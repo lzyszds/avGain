@@ -308,7 +308,8 @@ export class WindowManager {
 
 
       // 从M3U8 URL计算出需要下载的视频文件信息。
-      const { dataArr, dataCount } = await processM3u8.bind(that, headers)();
+      let { dataArr, dataCount } = await processM3u8.bind(that)();
+      dataArr = cleanM3u8Data(dataArr, downPath);
       //将视频数量存入store中
       storeData(this.app, {
         'downloadCount': dataCount
@@ -319,6 +320,7 @@ export class WindowManager {
         this.setLog('🔴 无法验证第一个证书 <br/>');
         return resolve('无法验证第一个证书');
       }
+
       // 将M3U8数据分割为等份，按线程数分配。
       const countArr = splitArrayIntoEqualChunks(dataArr, thread);
 
@@ -330,16 +332,15 @@ export class WindowManager {
       await terminateAllWorkers();
 
       for (let i = 0; i < thread; i++) {
-        const separateThread = new Worker(that.appPath + `\\electron\\seprate\\worker.js`);
+        const separateThread = new Worker(path.join(this.appPath, 'electron/seprate/worker.js'));
         this.workerArr.push(separateThread);
         // 创建一个新的Worker线程实例，用于处理下载任务。
         // 向Worker线程发送任务信息，启动下载。
         separateThread.postMessage({
           urlData: countArr[i],
-          index: i + 1,
-          headers: headers,
-          downPath: downPath,
+          downPath: that.pathJson.downloadPath + `/${designation}`,
           docPath: that.docPath,
+          headers,
         });
       }
     });
@@ -489,8 +490,8 @@ export class WindowManager {
       await this.getPreviewVideo(designation, newname, getCoverIndex, previewPath, coverPath)
       //删除下载的视频片段
       fs.rm(downloadPath + `/${designation}`, { recursive: true }, (err) => {
-        if (err) return this.setLog(`🔴 分段视频删除失败:${err} <br/>`)
-        this.setLog(`🟢 视频合并成功,分段视频已删除 <br/>`)
+        if (err) return this.setLog(`🔴 视频片段删除失败:${err} <br/>`)
+        this.setLog(`🟢 视频合并成功,视频片段已删除 <br/>`)
       })
 
       // 完成下载任务，返回结果。
@@ -731,13 +732,33 @@ function getVideoId(val: string) {
 function splitArrayIntoEqualChunks(array: string[], numberOfChunks: number) {
   const chunkSize = Math.ceil(array.length / numberOfChunks);
   const result: any = [];
-
   for (let i = 0; i < array.length; i += chunkSize) {
     result.push(array.slice(i, i + chunkSize));
   }
-
   return result;
 }
+
+//将m3u8中的数据进行清洗 意思是将已经下载视频的值删除
+function cleanM3u8Data(dataArr: string[], downloadPath: string) {
+  const files = fs.readdirSync(downloadPath);
+  const match = /(\d{1,4}).(jpg|jpeg|png|ts)$/g;
+  const mapArr = new Map()
+  //将下载的文件名存入map中
+  dataArr.forEach((item) => {
+    const m3u8Name = path.basename(item).match(match)[0].split(".")[0]
+    mapArr.set(m3u8Name, item)
+  })
+  //将已经下载的文件名删除
+  files.forEach((file) => {
+    const fileName = file.split(".")[0]
+    if (mapArr.has(fileName)) {
+      mapArr.delete(fileName)
+    }
+  })
+  //map数组转换为数组
+  return Array.from(mapArr.values())
+}
+
 //同步阻塞系统
 function sleep(timer: number) {
   return new Promise<string>((resolve, reject) => {
@@ -772,7 +793,7 @@ function sanitizeVideoName(name) {
  * @param app 用于下载文件的应用上下文（可能用于鉴权等）。
  * @returns 返回一个Promise，解析为一个对象，包含视频名称、URL前缀和未下载的段数据数组。
  */
-async function processM3u8(this: WindowManager, headers) {
+async function processM3u8(this: WindowManager) {
   const { url, designation } = this.downLoadConfig;
 
   try {

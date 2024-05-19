@@ -3,7 +3,7 @@ import fs from 'fs'
 import path, { join } from 'node:path'
 import sudo from 'sudo-prompt'
 import { download, CancelError } from 'electron-dl';
-
+import superagent from 'superagent';
 //存储文件时先判断当前路径是否存在文件夹，不存在先创建
 export function mkdirsSync(dirname) {
   // 判断目录是否存在
@@ -411,4 +411,45 @@ export async function inspectEnv(app: any) {
       }
     }
   });
+}
+
+
+
+
+//新线程池下载方式 下载任务函数
+async function downloadSegment(m3u8Url, segmentUrl, outputPath) {
+  try {
+    const response = await superagent.get(segmentUrl);
+    fs.writeFileSync(outputPath, response.body);
+    return outputPath;
+  } catch (error) {
+    throw new Error(`Failed to download segment from ${segmentUrl}: ${error.message}`);
+  }
+}
+
+
+export // 定义任务队列类
+  class TaskQueue {
+  private queue: (() => void)[] = [];
+  private isProcessing: boolean = false;
+
+  constructor(private maxThreads: number) { }
+
+  addTask(task: () => void) {
+    this.queue.push(task);
+    if (!this.isProcessing) {
+      this.processTasks();
+    }
+  }
+
+  private async processTasks() {
+    this.isProcessing = true;
+    while (this.queue.length > 0) {
+      const task = this.queue.shift();
+      if (task) {
+        await task();
+      }
+    }
+    this.isProcessing = false;
+  }
 }

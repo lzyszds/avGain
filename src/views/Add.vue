@@ -51,16 +51,17 @@ const codeValue = reactive({
   isShow: false,
 });
 //检测番号是否存在
-const onInspectId = async (name?: string) => {
+const onInspectId = async (name?: string, index?: number) => {
   let id = typeof name === "string" ? name : codeValue.value;
   if (!id) return;
-  id = id.toUpperCase().replace(/ /g, "");
+  id = getVideoId(id)!;
+
   //如果存在番号，则将isShow设置为true
   codeValue.isShow = await el.onInspectId(id);
   if (name && codeValue.isShow) {
     return ElNotification({
       title: "番号检测",
-      message: "番号已存在",
+      message: `番号已存在-${index ? index : "未知"}:${id}`,
       type: "error",
     });
   } else if (!name) {
@@ -73,8 +74,8 @@ const onInspectId = async (name?: string) => {
 };
 //检测所有备选番号在视频文件夹中是否存在
 const inspectAllId = async () => {
-  alternateArr.value.forEach(async (res) => {
-    await onInspectId(res.name);
+  alternateArr.value.forEach(async (res, index) => {
+    await onInspectId(res.name, index + 1);
   });
 };
 

@@ -222,6 +222,7 @@ async function configVideoListData() {
   // 获取视频数据
   try {
     videoDataList.value = await onGetListData();
+    console.log(`lzy  videoDataList.value:`, videoDataList.value);
   } catch (err) {
     LzyAlert({
       title: "温馨提示",
