@@ -85,7 +85,6 @@ async function downloadSegment(url, videoSegmentPath) {
     if (e.message === 'Internal Server Error') {
       handleLog.set(`🔴 片段下载出错，即将跨过此下载<br/>`, docPath)
     }
-    console.log(e.message);
     // else {
     //   handleLog.set(`🔴 worker.js 66行 ${e}  <br/>`, docPath)
     // }

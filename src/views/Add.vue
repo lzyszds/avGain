@@ -787,6 +787,9 @@ ul {
   }
   .alternateList {
     overflow-y: scroll;
+    &::-webkit-scrollbar {
+      width: 11px;
+    }
     .el-card {
       margin-bottom: 10px;
       position: relative;

@@ -310,6 +310,9 @@ export class WindowManager {
       // 从M3U8 URL计算出需要下载的视频文件信息。
       let { dataArr, dataCount } = await processM3u8.bind(that)();
       dataArr = cleanM3u8Data(dataArr, downPath);
+      if (dataArr.length <= thread) {
+        thread = dataArr.length;
+      }
       //将视频数量存入store中
       storeData(this.app, {
         'downloadCount': dataCount
