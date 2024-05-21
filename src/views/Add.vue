@@ -117,6 +117,8 @@ watch(
         });
       }
     });
+    //将所有内容存入系统文件存储中
+    appStoreData("alternateArr", arr);
   },
   {
     deep: true, // 深度监听 alternateArr.value 的变化
@@ -161,31 +163,22 @@ const downloadTime = computed(() => {
   return dayjs.duration(counter.value, "seconds").format("HH:mm:ss");
 });
 
+//将下载数据存入系统文件存储中
+const appStoreData = (key: string, value: any) => {
+  el.onHandleStoreData({ [key]: JSON.stringify(value) });
+};
+
 async function onSubmit() {
   let downLoadAfterCopy: number[] = [];
   isStartDown.value = !isStartDown.value;
   timer && clearInterval(timer);
   if (!isStartDown.value) {
     await el.pauseDownloadEvent();
-    return ElNotification({
-      title: "下载提示",
-      message: "下载已暂停",
-      type: "warning",
-    });
+    return "";
   }
   const { name, url } = sizeForm.value;
   if (!name || !url) return;
-
-  ElNotification({
-    title: "下载提示：",
-    message: "开始下载",
-    type: "success",
-  });
-
-  const appStoreData = (key, value) => {
-    el.onHandleStoreData({ [key]: JSON.stringify(value) });
-  };
-
+  debugger;
   if (!hasName(name)) {
     // 将对象转换为JSON字符串，并通过onHandleStoreData方法传递给el
     appStoreData("DownLoadForm", { ...sizeForm.value });
@@ -203,11 +196,6 @@ async function onSubmit() {
     //如果下载不动 时间超过60秒，则重新开始下载
     if (downLoadAfterCopy[after] > sizeForm.value.outTimer) {
       timer && clearInterval(timer);
-      ElNotification({
-        title: "下载提示：",
-        message: "下载异常，已停止下载",
-        type: "error",
-      });
       isStartDown.value = false;
       //重新开始下载
       return onSubmit();
@@ -260,9 +248,9 @@ function onAutoReplaceTask() {
 }
 
 //判断是否已经存在该名称
-function hasName(name) {
+function hasName(name: string) {
   let result = false;
-  downloadHistory.value.forEach((res) => {
+  downloadHistory.value.forEach((res: any) => {
     if (res.name == name) {
       result = true;
     }
@@ -274,7 +262,7 @@ getDownloadListContent();
 async function getDownloadListContent() {
   fileDirlist.value = await el.getDownloadListContent(downPath);
   //将其中的数据根据name进行排序
-  fileDirlist.value.sort((a, b) => {
+  fileDirlist.value.sort((a: any, b: any) => {
     return a.downloadTime - b.downloadTime;
   });
 }
@@ -299,7 +287,7 @@ let oldSize = 0;
 // 更新速度下载值的函数
 const updateSpeedDownload = () => {
   let totalSize = 0;
-  fileDirlist.value.forEach((res) => {
+  fileDirlist.value.forEach((res: any) => {
     totalSize += res.state;
   });
   // 如果新的总大小与旧的总大小相同，则不更新速度下载值
@@ -318,7 +306,7 @@ const updateSpeedDownload = () => {
 //获取总下载内容大小
 const getDownloadSize = () => {
   let newSize = 0;
-  fileDirlist.value.forEach((res) => {
+  fileDirlist.value.forEach((res: any) => {
     newSize += res.state;
   });
   return formatFileSize(newSize);
@@ -333,7 +321,7 @@ const addAlternate = () => {
   alternateArr.value.push({ name: "", url: "" });
 };
 //使用备选
-const useAlternate = (item) => {
+const useAlternate = (item: any) => {
   sizeForm.value.name = item.name;
   sizeForm.value.url = item.url;
 };
@@ -374,7 +362,9 @@ const getSystemLog = async () => {
   logData.logTimer = setInterval(async () => {
     const res = await el.onGetSystemLog();
     logData.value = res.split("<br/>");
-    logData.arr = res.split("<br/>").filter((res) => res.includes("正在下载"));
+    logData.arr = res
+      .split("<br/>")
+      .filter((res: any) => res.includes("正在下载"));
     //如果日志内容超过100条，则只显示最新的100条
     if (logData.value.length > 100) {
       logData.value = logData.value.slice(logData.value.length - 100);
@@ -423,12 +413,14 @@ onBeforeUnmount(async () => {
         />
         {{ downPath }}
       </li>
-      <li class="dirContent" v-for="(item, index) in fileDirlist" :key="index">
-        <span>
-          <lzy-icon name="ph:file-ts"></lzy-icon>
-          {{ item.name }}
-        </span>
-        <span>{{ formatFileSize(item.state) }}</span>
+      <li class="dirContent">
+        <p class="text" v-for="(item, index) in fileDirlist" :key="index">
+          <span>
+            <lzy-icon name="ph:file-ts"></lzy-icon>
+            {{ item.name }}
+          </span>
+          <span>{{ formatFileSize(item.state) }}</span>
+        </p>
       </li>
       <li class="tools">
         <LzyBtn
@@ -564,7 +556,7 @@ onBeforeUnmount(async () => {
           type="primary"
           style="border-radius: 10px"
         >
-          检查备选
+          检查备选({{ alternateArr.length }}条)
         </el-button>
       </div>
       <div class="alternateList">
@@ -651,9 +643,16 @@ ul {
     }
 
     &.dirContent {
-      display: flex;
-      justify-content: space-between;
+      display: grid;
+      max-height: 300px;
+      overflow-y: scroll;
 
+      p.text {
+        width: 95%;
+        margin: 0;
+        display: flex;
+        justify-content: space-between;
+      }
       span:last-child {
         font-size: 12px;
         line-height: 25px;
