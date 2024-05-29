@@ -217,42 +217,16 @@ export async function downloadM3U8(): Promise<string> {
   const { designation } = this.downLoadConfig;
   const that = this
   const downloadDir = that.docPath + "\\data"
-  let isExistArr = false
-  const dataDir = fs.readdirSync(downloadDir)
-  dataDir.forEach(async item => {
-    if (item.includes(designation)) {
-      return isExistArr = true
-    }
-  })
+  const m3u8Path = downloadDir + `\\${designation}.m3u8`
   return new Promise(async (resolve, reject) => {
-    if (!isExistArr) {
+    if (!fs.existsSync(m3u8Path)) {
       await handelLzyDownload.bind(that)(downloadDir)
     }
+    const fileInfo = fs.readFileSync(m3u8Path, "utf-8")
 
-    fs.readdir(downloadDir, (err, files) => {
-      if (err) {
-        reject(err);
-      } else {
-        const fileInfos: any[] = []
-        //根据时间获取最新的文件内容
-        files.forEach((file, index) => {
-          const fileInfo = fs.statSync(that.docPath + "\\data\\" + file)
-          if (fileInfo.isFile()) {
-            fileInfos.push({
-              name: file,
-              time: fileInfo.birthtimeMs
-            })
-          }
-        });
-
-        //返回时间最大的文件
-        const fileInfo = quickSortByTimestamp(fileInfos, 'time', false)[0]
-        const res = fs.readFileSync(that.docPath + "\\data\\" + fileInfo.name, "utf-8")
-        //通过日志提醒用户下载完成m3u8文件
-        handleLog.set("📋 m3u8文件下载完成，准备开始下载视频 <br/>", that.docPath + '\\log.txt')
-        resolve(res)
-      }
-    });
+    //通过日志提醒用户下载完成m3u8文件
+    handleLog.set("📋 m3u8文件下载完成，准备开始下载视频 <br/>", that.docPath + '\\log.txt')
+    resolve(fileInfo)
   });
 }
 
@@ -276,8 +250,7 @@ export function aria2cDownload(option: {
   const { url, directory, filename } = option
   const headers = '--header="Accept: */*" --header="accept-language: zh-CN,zh;q=0.9,en;q=0.8" --header="Referer: https://emturbovid.com/" --header="Referrer-Policy: strict-origin-when-cross-origin"'
   return new Promise((resolve, reject) => {
-    let o = filename + '.m3u8'
-    exec(`aria2c -d ${directory} -o ${o} ${headers} ${url}`, (error, stdout, stderr) => {
+    exec(`aria2c -d ${directory} -o ${filename} ${headers} ${url}`, (error, stdout, stderr) => {
       if (error) {
         reject(error);
       }

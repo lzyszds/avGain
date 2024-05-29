@@ -289,7 +289,7 @@ export class WindowManager {
     const that = this;
     return new Promise(async (resolve, reject) => {
       // 解构从前端进程传入的参数。 resource:资源请求方式
-      let { resource, name, url, thread, downPath } = arg;
+      let { name, url, thread, downPath } = arg;
       // 获取HTTP请求头信息。
       const headers = getHeaders("SuperJav");
       //截取番号出来
@@ -499,7 +499,7 @@ export class WindowManager {
       })
 
       // 完成下载任务，返回结果。
-      return name
+      return designation
     } else {
       // 如果合并失败，返回错误信息。
       return resulted
