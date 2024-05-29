@@ -288,10 +288,10 @@ export class WindowManager {
   private onDownloadVideoEvent(event: Electron.IpcMainInvokeEvent, arg: any) {
     const that = this;
     return new Promise(async (resolve, reject) => {
-      // 解构从前端进程传入的参数。
+      // 解构从前端进程传入的参数。 resource:资源请求方式
       let { resource, name, url, thread, downPath } = arg;
       // 获取HTTP请求头信息。
-      const headers = getHeaders(resource);
+      const headers = getHeaders("SuperJav");
       //截取番号出来
       const designation = getVideoId(name)
       // 清洗和处理视频名称。
@@ -344,6 +344,7 @@ export class WindowManager {
           downPath: that.pathJson.downloadPath + `/${designation}`,
           docPath: that.docPath,
           headers,
+          sizeData: { ...arg }
         });
       }
     });

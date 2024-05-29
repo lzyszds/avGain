@@ -39,11 +39,12 @@ const downloadHistory = ref(JSON.parse(rawData || "[]"));
 downloadHistory.value = downloadHistory.value.filter((res: any) => res.name);
 
 const sizeForm = useStorage("sizeForm", {
-  resource: "SuperJav", //来源
+  resource: "axios", //来源
   name: "", //视频名称
   url: "", //m3u8链接
   thread: 50, //下载进程数量
   isAutoTask: true, //是否开启自动替换任务
+  isConcurrency: true, //是否开启高并发下载
   outTimer: 10, //超时重下时间
 });
 const codeValue = reactive({
@@ -157,10 +158,16 @@ const newPage = ref(1);
 let timer: any;
 
 //下载时间计时器
-const counter = ref(0);
+const counter = reactive({
+  oldValue: 0,
+  newValue: 0,
+  videoName: "",
+});
 
 const downloadTime = computed(() => {
-  return dayjs.duration(counter.value, "seconds").format("HH:mm:ss");
+  return dayjs
+    .duration(Math.max(0, counter.newValue - counter.oldValue), "seconds")
+    .format("HH:mm:ss");
 });
 
 //将下载数据存入系统文件存储中
@@ -176,25 +183,41 @@ async function onSubmit() {
     await el.pauseDownloadEvent();
     return "";
   }
+
   const { name, url } = sizeForm.value;
   if (!name || !url) return;
-  debugger;
   if (!hasName(name)) {
     // 将对象转换为JSON字符串，并通过onHandleStoreData方法传递给el
     appStoreData("DownLoadForm", { ...sizeForm.value });
     downloadHistory.value.unshift({ ...sizeForm.value });
     appStoreData("downloadHistory", downloadHistory.value);
   }
+  if (counter.videoName != name) {
+    counter.oldValue = dayjs().unix();
+    counter.videoName = name;
+  }
+  let downLoadAfterNumber = 0;
   timer = setInterval(async () => {
+    // 等待元素的下载进度信息
     storeData.value = await el.onGetDownloadProgress(name);
+    // 从返回的进度信息中解构出当前下次数量和需要下载总数量
     const { downLoadAfter: after, downloadCount: count } = storeData.value;
+    // 如果下载完成时间的计数器不存在，则初始化为1；否则，计数器加1
     if (!downLoadAfterCopy[after]) {
       downLoadAfterCopy[after] = 1;
     } else {
       downLoadAfterCopy[after] += 1;
     }
-    //如果下载不动 时间超过60秒，则重新开始下载
-    if (downLoadAfterCopy[after] > sizeForm.value.outTimer) {
+    // 设置当前时间戳为计数器的新值
+    counter.newValue = dayjs().unix();
+    //如果downLoadAfterCopy的前五项之和 超过outTimer，则重新开始下载
+    const newTimer = downLoadAfterCopy
+      .slice()
+      .sort((a, b) => b - a)
+      .slice(0, 5)
+      .reduce((a, b) => a + b, 0);
+    console.log(`lzy  newTimer:`, newTimer);
+    if (newTimer > sizeForm.value.outTimer) {
       timer && clearInterval(timer);
       isStartDown.value = false;
       //重新开始下载
@@ -203,21 +226,22 @@ async function onSubmit() {
       // 更新下载列表内容
       getDownloadListContent();
       updateSpeedDownload();
+      downLoadAfterNumber = storeData.value.downLoadAfter;
     }
-    counter.value++;
 
     // 判断是否下载完成
     if (after == count || downLoadAfterCopy.length === 0) {
       timer && clearInterval(timer);
       //视频下载完成后，将视频进行合并
       await onMergeVideo();
-      counter.value = 0;
+      counter.oldValue = 0;
+      counter.newValue = 0;
       isStartDown.value = false;
 
       setTimeout(() => {
         getDownloadListContent(); //更新下载列表
         updateSpeedDownload(); //更新下载速度
-        el.onClearSystemLog(); // 清空日志
+        // el.onClearSystemLog(); // 清空日志
         onAutoReplaceTask(); //判断是否开启自动替换任务
       }, 1000);
     }
@@ -278,9 +302,6 @@ async function onMergeVideo() {
   const msg = await el.onMergeVideo({
     name,
   });
-  getDownloadListContent(); //更新下载列表
-  updateSpeedDownload(); //更新下载速度
-  onAutoReplaceTask(); //判断是否开启自动替换任务
 }
 
 let oldSize = 0;
@@ -478,8 +499,8 @@ onBeforeUnmount(async () => {
       >
         <el-form-item label="资源来路">
           <el-radio-group v-model="sizeForm.resource">
-            <el-radio border label="SuperJav" />
-            <el-radio border label="MissJav" />
+            <el-radio border label="axios" />
+            <el-radio border label="superagent" />
             <el-input
               v-model="codeValue.value"
               placeholder="输入番号检测"
@@ -501,20 +522,28 @@ onBeforeUnmount(async () => {
         </el-form-item>
         <el-form-item label="下载线程" class="downloadSet">
           <el-input v-model="sizeForm.thread" type="number" max="50" min="1" />
-          <span class="outTimer">
+          <div class="outTimer">
             超时时间
             <el-input v-model="sizeForm.outTimer" type="number">
               <template #append>s</template>
             </el-input>
-          </span>
-          <span>
-            自动替换任务
+          </div>
+          <div class="isAutoTask">
+            自动替换
             <el-switch
               v-model="sizeForm.isAutoTask"
               active-text="是"
               inactive-text="否"
             />
-          </span>
+          </div>
+          <div class="isConcurrency">
+            高并发
+            <el-switch
+              v-model="sizeForm.isConcurrency"
+              active-text="是"
+              inactive-text="否"
+            />
+          </div>
         </el-form-item>
         <el-form-item class="sumbit">
           <!-- v-show="speedDownload" -->
@@ -735,12 +764,16 @@ ul {
   }
   .downloadSet :deep(.el-form-item__content) {
     display: grid;
-    grid-template-columns: 100px 200px 200px;
+    grid-template-columns: 100px 200px 180px 150px;
     gap: 10px;
     font-family: "almama";
     color: #000 !important;
-    span.is-text {
-      color: #22ffa3 !important;
+    div.isAutoTask,
+    div.isConcurrency {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 10px;
     }
     .outTimer {
       display: flex;
@@ -887,9 +920,9 @@ ul {
 
     .el-progress-bar__inner {
       background-image: linear-gradient(to top, #a18cd1 0%, #fbc2eb 100%);
-      margin: 3px;
+      margin: 2px;
       max-width: 99%;
-      height: 70%;
+      height: 75%;
     }
 
     .el-progress-bar__innerText {
