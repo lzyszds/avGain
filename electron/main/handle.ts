@@ -312,6 +312,7 @@ export class WindowManager {
       dataArr = cleanM3u8Data(dataArr, downPath);
       if (dataArr.length <= thread) {
         thread = dataArr.length;
+        arg.isConcurrency = false;
       }
       //将视频数量存入store中
       storeData(this.app, {
