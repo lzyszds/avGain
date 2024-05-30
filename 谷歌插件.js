@@ -13,7 +13,7 @@
 // @namespace    https://tools.thatwind.com/
 // @homepage     https://tools.thatwind.com/tool/m3u8downloader
 // @match        *://*/*
-// @exclude      *://www.diancigaoshou.com/*
+// @exclude      *://www.diancigaoshou.com/* http://localhost*
 // @require      https://cdn.jsdelivr.net/npm/m3u8-parser@4.7.1/dist/m3u8-parser.min.js
 // @connect      *
 // @grant        unsafeWindow
@@ -35,7 +35,7 @@
 
 (function () {
     'use strict';
-
+    let urls = []
     const mgmapi = {
 
         addStyle(s) {
@@ -459,7 +459,6 @@
         for (let v of Array.from(document.querySelectorAll("video"))) {
             if (v.duration && v.src && v.src.startsWith("http") && (!shownUrls.includes(v.src))) {
                 const src = v.src;
-
                 shownUrls.push(src);
                 showVideo({
                     type: "video",
@@ -491,8 +490,12 @@
         }
     }
 
-    async function doM3U({ url, content }) {
+    let itemUrl = ''
 
+    async function doM3U({ url, content }) {
+        urls.push(JSON.stringify(url))
+
+        console.log(urls)
         url = new URL(url);
 
         if (shownUrls.includes(url.href)) return;
@@ -504,7 +507,10 @@
         parser.push(content);
         parser.end();
         const manifest = parser.manifest;
-
+        if (urls.length == 1) {
+            const list = manifest.playlists
+            itemUrl = list[list.length - 1].uri
+        }
         if (manifest.segments) {
             let duration = 0;
             manifest.segments.forEach((segment) => {
@@ -544,7 +550,7 @@
             <span>${type}</span>
             <span
                 class="copy-link"
-                title="${url}"
+                title="${urls.length == 1 ? itemUrl : url.href}"
                 style="
                     max-width: 200px;
                     text-overflow: ellipsis;
@@ -552,8 +558,8 @@
                     overflow: hidden;
                     margin-left: 10px;
                 "
-            >${url.pathname}</span>
-            <span 
+            >${urls.length == 1 ? itemUrl : url.href}</span>
+            <span
                 style="
                     margin-left: 10px;
                     flex-grow: 1;
@@ -567,9 +573,9 @@
             ">下载(Download)</span>
         `;
 
-        div.querySelector(".copy-link").addEventListener("click", () => {
+        div.querySelector(".copy-link").addEventListener("click", (e) => {
             // 复制链接
-            mgmapi.copyText(url.href);
+            mgmapi.copyText(e.target.getAttribute("title"));
             mgmapi.message("已复制链接 (link copied)", 2000);
         });
 
