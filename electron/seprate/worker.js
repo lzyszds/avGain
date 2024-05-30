@@ -20,6 +20,8 @@ const axiosFunction = {
     return axios.get(url, {
       responseType: 'arraybuffer',
       headers: parasData.headers,
+      maxContentLength: 20 * 1024 * 1024, // 设置最大内容长度为10MB
+
     })
   },
   //superagent请求方式
@@ -77,21 +79,25 @@ const axiosFunction = {
       urlsName.push(videoSegmentPath)
       return that[parasData.resource](url)
     })
-    const result = await Promise.allSettled(request)
-
-    result.forEach((res, index) => {
-      if (res.status === 'fulfilled') {
-        const suffix = parasData.resource == 'axios' ? 'data' : 'body'
-        mergeTs(res.value[suffix], urlsName[index])
+    try {
+      const result = await Promise.allSettled(request)
+      result.forEach((res, index) => {
+        if (res.status === 'fulfilled') {
+          const suffix = parasData.resource == 'axios' ? 'data' : 'body'
+          mergeTs(res.value[suffix], urlsName[index])
+        } else {
+          handleLog.set(`🔴 ${res.reason} <br/>`, parasData.docPath)
+        }
+      })
+      if (parasData.count < parasData.urlData.length) {
+        that.inspectDownAxiosConcurrency(parasData.newUrls[++parasData.count])
       } else {
-        handleLog.set(`🔴 ${res.reason} <br/>`, parasData.docPath)
+        handleLog.set(`🟢 下载完成 <br/>`, parasData.docPath)
       }
-    })
-    if (parasData.count < parasData.urlData.length) {
-      that.inspectDownAxiosConcurrency(parasData.newUrls[++parasData.count])
-    } else {
-      handleLog.set(`🟢 下载完成 <br/>`, parasData.docPath)
+    } catch (e) {
+      console.log(`错误代码85行：`, e)
     }
+
   },
   //将集合分成n个小集合  
   sliceDown: function () {
