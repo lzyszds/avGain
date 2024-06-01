@@ -224,6 +224,7 @@ async function configVideoListData() {
     videoDataList.value = await onGetListData();
     console.log(`lzy  videoDataList.value:`, videoDataList.value);
   } catch (err) {
+    console.log(`lzy  err:`, err)
     LzyAlert({
       title: "温馨提示",
       content: "视频文件夹路径错误，请重新设置",

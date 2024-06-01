@@ -2,8 +2,11 @@ import { shell, dialog, Notification } from 'electron';
 import fs from 'fs'
 import path, { join } from 'node:path'
 import sudo from 'sudo-prompt'
-import axios from 'axios'
+import { download, CancelError } from 'electron-dl';
 import superagent from 'superagent';
+import m3u8Parser from 'm3u8-parser'
+import URL from 'url';
+
 //存储文件时先判断当前路径是否存在文件夹，不存在先创建
 export function mkdirsSync(dirname) {
   // 判断目录是否存在
@@ -319,16 +322,14 @@ export async function lzyDownload(win, options: {
   filename: string,
 }) {
   try {
-    const { data } = await axios.get(options.url, {
-      headers: {
-        "Referer": "https://emturbovid.com/",
-        "Referrer-Policy": "strict-origin-when-cross-origin",
-        "accept": "*/*",
-        "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
-      }
+    await download(win, options.url, {
+      directory: options.directory,
+      filename: options.filename,
     })
-    fs.writeFileSync(join(options.directory, options.filename), data, 'utf-8')
   } catch (error) {
+    if (error instanceof CancelError) {
+      return console.info('item.cancel() was called');
+    }
     console.error(error);
     handleLog.set(options.filename + '下载失败,即将更换aria2c下载', join(options.directory, 'log.txt'))
     // 更换下载方式
@@ -401,6 +402,153 @@ async function downloadSegment(m3u8Url, segmentUrl, outputPath) {
     throw new Error(`Failed to download segment from ${segmentUrl}: ${error.message}`);
   }
 }
+
+
+//识别视频番号
+export function getVideoId(val: string) {
+  return val.split(' ')[0].replace('[无码破解]', "")
+}
+
+//将数组拆分为相等的块
+export function splitArrayIntoEqualChunks(array: string[], numberOfChunks: number) {
+  const chunkSize = Math.ceil(array.length / numberOfChunks);
+  const result: any = [];
+  for (let i = 0; i < array.length; i += chunkSize) {
+    result.push(array.slice(i, i + chunkSize));
+  }
+  return result;
+}
+
+//将m3u8中的数据进行清洗 意思是将已经下载视频的值删除
+export function cleanM3u8Data(dataArr: string[], downloadPath: string) {
+  const files = fs.readdirSync(downloadPath);
+  const match = /(\d{1,4}).(jpg|jpeg|png|ts)$/g;
+  const mapArr = new Map()
+  //将下载的文件名存入map中
+  dataArr.forEach((item) => {
+    const m3u8Name = path.basename(item).match(match)[0].split(".")[0]
+    mapArr.set(m3u8Name, item)
+  })
+  //将已经下载的文件名删除
+  files.forEach((file) => {
+    const fileName = file.split(".")[0]
+    if (mapArr.has(fileName)) {
+      mapArr.delete(fileName)
+    }
+  })
+  //map数组转换为数组
+  return Array.from(mapArr.values())
+}
+
+//同步阻塞系统
+export function sleep(timer: number) {
+  return new Promise<string>((resolve, reject) => {
+    setTimeout(() => {
+      resolve('')
+    }, timer)
+  })
+}
+// 把清洗和处理名称的逻辑抽离为一个单独的函数。
+export function sanitizeVideoName(name) {
+  // 替换掉名字中的非法字符
+  return name.replace('[无码破解]', '')
+    // 保留中文、日文字符，删除其他非字母数字字符。
+    .replaceAll(/[^\u4E00-\u9FA5\u3040-\u309F\u30A0-\u30FF\uFF65-\uFF9Fa-zA-Z0-9/-]/g, '')
+    .replaceAll(/[\·\・\●\/]/g, '')
+    .replaceAll(' ', '');
+}
+
+/**
+ * 处理M3U8文件的逻辑。
+ * 
+ * @param url M3U8文件的URL地址。
+ * @param headers 请求M3U8文件时的HTTP头信息。
+ * @param docPath 保存下载文件的文档路径。
+ * @param app 用于下载文件的应用上下文（可能用于鉴权等）。
+ * @returns 返回一个Promise，解析为一个对象，包含视频名称、URL前缀和未下载的段数据数组。
+ */
+export async function processM3u8(this) {
+  const { url, designation } = this.downLoadConfig;
+
+  try {
+    // 下载M3U8文件
+    const m3u8Data = await downloadM3U8.bind(this)();
+    // 解析M3U8文件
+    const myParser = new m3u8Parser.Parser();
+    myParser.push(m3u8Data);
+    myParser.end();
+
+    // 初始化并获取过滤后的段数据
+    let dataArr = myParser.manifest.segments || [];
+    const dataCount = dataArr.length;
+    const filePath = path.join(this.pathJson.downloadPath, designation);
+
+    // 使用异步方式读取目录避免性能问题
+    const files = fs.readdirSync(filePath);
+    files.forEach((file) => {
+      dataArr = dataArr.filter((item) => {
+        const fileName = path.basename(item.uri);
+        return fileName.replace(/[^\d]/g, '') !== file.replace(/[^\d]/g, '');
+      });
+    });
+    dataArr = dataArr.map((item) => {
+      return URL.resolve(url, item.uri);
+    })
+    return { dataArr, dataCount };
+  } catch (e) {
+    // 异步日志记录
+    await handleLog.set(`🔴 下载出错: ${e} <br/>`, `${this.docPath}/log.txt`);
+    // 出错时返回空的段数据数组
+    return { dataArr: [], dataCount: 0 };
+  }
+}
+
+
+//清空文件夹内容
+export function deleteDirFile(path: string, retries = 3, delay = 3000) {
+  if (path) {
+    fs.readdirSync(path).forEach((file) => {
+      try {
+        //如果文件不存在
+        if (!fs.existsSync(path + '/' + file)) return
+
+        fs.unlink(path + '/' + file, (err) => {
+          if (!err) return
+          if (err.code === 'EBUSY' && retries > 0) {
+            if (file.indexOf('.ts') == -1) {
+              console.log(`文件正被占用，${4 - retries}次重试`)
+            }
+            setTimeout(() => {
+              deleteDirFile(path, retries - 1, delay);
+            }, delay);
+          }
+        })
+      } catch (e) { }
+    })
+  }
+}
+
+
+//获取请求头
+export function getHeaders(resource) {
+  let headers = {
+    "accept": "*/*",
+    "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
+  }
+  if (resource === 'SuperJav') {
+    Object.assign(headers, {
+      "Referer": "https://emturbovid.com/",
+      "Referrer-Policy": "strict-origin-when-cross-origin"
+    })
+  } else {
+    Object.assign(headers, {
+      "Referer": "https://missav.com/cn/pppd-985-uncensored-leak",
+      "Origin": "https://missav.com"
+    })
+  }
+  return headers
+}
+
 
 
 export // 定义任务队列类

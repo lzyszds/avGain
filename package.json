@@ -13,6 +13,34 @@
     "vue3",
     "vue"
   ],
+  "build": {
+    "productName": "AvGain",
+    "copyright": "Copyright © 2024 lzyszds ",
+    "directories": {
+      "output": "build"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "allowToChangeInstallationDirectory": true
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "public/logo256.png",
+      "compression": "maximum",
+      "artifactName": "AVGain_Setup_${version}.${ext}",
+      "extraResources": [
+        {
+          "from": "public/logo256.png",
+          "to": "build/win-unpacked/resources"
+        }
+      ]
+    }
+  },
   "debug": {
     "env": {
       "VITE_DEV_SERVER_URL": "http://127.0.0.1:3344/"
@@ -24,7 +52,7 @@
     "clean": "tsc --build --clean",
     "create": "node createSeprate.js",
     "viteBuild": "vite build",
-    "build": "tsc && vite build && electron-builder && tsc --build --clean",
+    "build": "vite build && electron-builder",
     "electronBuild": "electron-builder --win"
   },
   "dependencies": {

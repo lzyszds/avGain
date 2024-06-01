@@ -249,7 +249,7 @@ async function onSubmit() {
   }, 1000);
   try {
     //开始下载任务
-    await el.downloadVideoEvent({
+    await el.onDownloadVideo({
       ...sizeForm.value,
       downPath,
       previewPath,
