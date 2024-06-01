@@ -1,4 +1,4 @@
-import { ElMessage, ElMessageBox } from "element-plus"
+import { ElMessage, ElMessageBox, dayjs } from "element-plus"
 import type { messageType } from "element-plus"
 import * as echarts from "echarts";
 
@@ -54,22 +54,19 @@ export function formatFileSize(fileSize: any) {
 }
 
 //处理下载进程下载进度echart图表 监听进程的下载进度
-export function handleEchart(sizeForm, logData) {
-  const arr = handleLogData(logData.arr);
+export function handleEchart(data: any) {
+  console.log(`lzy  data:`, data)
 
   const echartMain = document.querySelector(".echartMain") as HTMLElement;
   const workerEchart = echarts.init(echartMain);
   var option = {
     tooltip: {
       trigger: "item",
-      formatter: function (params) {
-        return params.name + "线程: " + params.value;
+      formatter: function (params: any) {
+        return params.name + "所用时间: " + dayjs(params.value * 1000).format("mm:ss");
       },
       axisPointer: {
         type: "line",
-        lineStyle: {
-          color: "#57617B",
-        },
       },
     },
     grid: {
@@ -81,8 +78,7 @@ export function handleEchart(sizeForm, logData) {
     },
     xAxis: {
       type: "category",
-      boundaryGap: true,
-      data: Array.from({ length: sizeForm.thread }, (v, k) => k + 1),
+      data: Object.keys(data),
     },
     yAxis: {
       type: "value",
@@ -91,7 +87,7 @@ export function handleEchart(sizeForm, logData) {
       {
         name: "aa",
         type: "line",
-        data: arr,
+        data: Object.values(data),
         itemStyle: {
           color: "#7D2AE8", // 这里填写你期望的颜色，比如'#61a0a8'
         },
@@ -115,7 +111,7 @@ export function handleEchart(sizeForm, logData) {
 }
 
 //速度仪表盘echarts
-export function handleSpeedEchart(logData) {
+export function handleSpeedEchart() {
   const speedEcharts = document.querySelector(".speedEcharts") as HTMLElement;
   const speedEchart = echarts.init(speedEcharts);
   let option = {
@@ -185,7 +181,7 @@ export function handleSpeedEchart(logData) {
           borderRadius: 8,
           offsetCenter: [0, "30%"],
           valueAnimation: true,
-          formatter: function (value) {
+          formatter: function (value: number) {
             return "{value|" + value.toFixed(0) + "}{unit|MB/s}";
           },
           rich: {
@@ -213,7 +209,7 @@ export function handleSpeedEchart(logData) {
   return speedEchart
 }
 
-export function handleLogData(val) {
+export function handleLogData(val: any[]) {
   if (!val) return []
   return val
     .map((res) => res.split(" ")[2].replace("线程", ""))

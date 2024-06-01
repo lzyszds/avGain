@@ -41,6 +41,7 @@ downloadHistory.value = downloadHistory.value.filter((res: any) => res.name);
 const sizeForm = useStorage("sizeForm", {
   resource: "axios", //来源
   name: "", //视频名称
+  urls: "", //m3u8初始集合
   url: "", //m3u8链接
   thread: 50, //下载进程数量
   isAutoTask: true, //是否开启自动替换任务
@@ -145,7 +146,7 @@ const percentage = computed(() => {
 });
 
 const fileDirlist = ref<any>([]);
-const speedDownload = ref<string>();
+const speedDownload = ref<string>("0 MB");
 
 const activeNames = ref(["1"]);
 
@@ -171,17 +172,16 @@ const downloadTime = computed(() => {
 });
 
 //将下载数据存入系统文件存储中
-const appStoreData = (key: string, value: any) => {
-  el.onHandleStoreData({ [key]: JSON.stringify(value) });
+const appStoreData = async (key: string, value: any) => {
+  await el.onHandleStoreData({ [key]: JSON.stringify(value) });
 };
-
+const newTimer = ref(0);
 async function onSubmit() {
-  let downLoadAfterCopy: number[] = [];
   isStartDown.value = !isStartDown.value;
   timer && clearInterval(timer);
   if (!isStartDown.value) {
     await el.pauseDownloadEvent();
-    return "";
+    return;
   }
 
   const { name, url } = sizeForm.value;
@@ -197,6 +197,7 @@ async function onSubmit() {
     counter.videoName = name;
   }
   let downLoadAfterNumber = 0;
+  let downLoadAfterCopy: number[] = [];
   timer = setInterval(async () => {
     // 等待元素的下载进度信息
     storeData.value = await el.onGetDownloadProgress(name);
@@ -211,13 +212,12 @@ async function onSubmit() {
     // 设置当前时间戳为计数器的新值
     counter.newValue = dayjs().unix();
     //如果downLoadAfterCopy的前五项之和 超过outTimer，则重新开始下载
-    const newTimer = downLoadAfterCopy
+    newTimer.value = downLoadAfterCopy
       .slice()
       .sort((a, b) => b - a)
       .slice(0, 5)
       .reduce((a, b) => a + b, 0);
-    console.log(`lzy  newTimer:`, newTimer);
-    if (newTimer > sizeForm.value.outTimer) {
+    if (newTimer.value > sizeForm.value.outTimer) {
       timer && clearInterval(timer);
       isStartDown.value = false;
       //重新开始下载
@@ -231,6 +231,7 @@ async function onSubmit() {
 
     // 判断是否下载完成
     if (after == count || downLoadAfterCopy.length === 0) {
+      if (downLoadAfterNumber === 0) return;
       timer && clearInterval(timer);
       //视频下载完成后，将视频进行合并
       await onMergeVideo();
@@ -238,11 +239,11 @@ async function onSubmit() {
       counter.newValue = 0;
       isStartDown.value = false;
 
-      setTimeout(() => {
+      setTimeout(async () => {
         getDownloadListContent(); //更新下载列表
         updateSpeedDownload(); //更新下载速度
-        // el.onClearSystemLog(); // 清空日志
-        onAutoReplaceTask(); //判断是否开启自动替换任务
+        await onAutoReplaceTask(); //判断是否开启自动替换任务
+        await el.onClearSystemLog(); // 清空日志
       }, 1000);
     }
   }, 1000);
@@ -261,13 +262,13 @@ async function onSubmit() {
 }
 
 //下载完成后自动替换名字链接
-function onAutoReplaceTask() {
+async function onAutoReplaceTask() {
   // 将备选内容第一个赋值给sizeForm 并删除备选内容 然后开始下载下一个
   if (alternateArr.value.length > 0 && sizeForm.value.isAutoTask) {
     sizeForm.value.name = alternateArr.value[0].name;
     sizeForm.value.url = alternateArr.value[0].url;
     alternateArr.value.splice(0, 1);
-    onSubmit();
+    await onSubmit();
   }
 }
 
@@ -297,11 +298,20 @@ function deleteDirFile() {
 }
 //合并视频（以解决视频不合并的问题）
 async function onMergeVideo() {
+  logData.downHistyList = JSON.parse(
+    await el.onHandleStoreData("histDownSpeeds")
+  );
   const { name } = sizeForm.value;
-  console.log(`lzy  name:`, name);
-  const msg = await el.onMergeVideo({
+  const designation = await el.onMergeVideo({
     name,
   });
+  //合并完成后将该次下载的时间番号存入系统存储中
+  await appStoreData(
+    "histDownSpeeds",
+    Object.assign(logData.downHistyList, {
+      [designation]: Math.max(0, counter.newValue - counter.oldValue),
+    })
+  );
 }
 
 let oldSize = 0;
@@ -373,7 +383,8 @@ const logData = reactive({
   logTimer: null as any, //日志定时器
   isOnScroll: true, //是否自动滚动
   arr: [] as any[], //日志数组
-  workerEchart: null as any, //echart图表
+  downHistyList: [], //已经下载的记录（下载所用时间跟番号）
+  downloadHistyEchart: null as any, //echart图表
 });
 
 const getSystemLog = async () => {
@@ -398,22 +409,16 @@ const getSystemLog = async () => {
     try {
       systemLog.scrollTop = systemLog.scrollHeight;
     } catch (e) {}
-    //设置进程下载进度echart图表
-    logData.workerEchart.setOption({
-      series: [
-        {
-          data: handleLogData(logData.arr),
-        },
-      ],
-    });
   }, 500);
 };
 await getSystemLog();
 
-onMounted(() => {
-  logData.workerEchart = handleEchart(sizeForm.value, logData);
+onMounted(async () => {
+  logData.downHistyList = JSON.parse(
+    await el.onHandleStoreData("histDownSpeeds")
+  );
+  // handleEchart(logData.downHistyList);
 });
-
 onBeforeUnmount(async () => {
   //将日志定时器清除
   logData.logTimer && clearInterval(logData.logTimer);
@@ -513,12 +518,13 @@ onBeforeUnmount(async () => {
           <el-input v-model="sizeForm.name" />
         </el-form-item>
         <el-form-item label="下载地址">
-          <el-input
-            v-model="sizeForm.url"
-            :autosize="{ minRows: 3, maxRows: 5 }"
-            type="textarea"
-            spellcheck="false"
-          />
+          <div class="url-content">
+            <el-input
+              v-model="sizeForm.url"
+              :autosize="{ minRows: 3, maxRows: 5 }"
+              type="textarea"
+            />
+          </div>
         </el-form-item>
         <el-form-item label="下载线程" class="downloadSet">
           <el-input v-model="sizeForm.thread" type="number" max="50" min="1" />
@@ -547,10 +553,15 @@ onBeforeUnmount(async () => {
         </el-form-item>
         <el-form-item class="sumbit">
           <!-- v-show="speedDownload" -->
-          <span style="text-align: left">下载速度：{{ speedDownload }}/s</span>
+          <span style="text-align: left">
+            下载速度：{{ speedDownload }}/s
+          </span>
           <el-progress :text-inside="true" :percentage="percentage" />
           <div class="timeSpeed">
-            <p>{{ storeData.downLoadAfter }}/{{ storeData.downloadCount }}</p>
+            <p>
+              {{ storeData.downLoadAfter }}/{{ storeData.downloadCount }}
+              <span style="color: red !important">{{ newTimer }}</span>
+            </p>
             <p>{{ downloadTime }}</p>
           </div>
         </el-form-item>
@@ -596,22 +607,28 @@ onBeforeUnmount(async () => {
         >
           <p>{{ index + 1 }}</p>
           <el-form-item label="番号名字">
-            <div class="alterTools">
+            <div class="alterTools one">
               <el-input v-model="item.name" spellcheck="false" />
-              <el-button type="primary" @click="useAlternate(item)"
-                >更换备选</el-button
-              >
+              <el-button type="primary" @click="useAlternate(item)">
+                更换备选
+              </el-button>
             </div>
           </el-form-item>
           <el-form-item label="下载地址">
-            <div class="alterTools">
-              <el-input v-model="item.url" spellcheck="false" />
+            <div class="alterTools two">
+              <el-input
+                v-model="item.url"
+                spellcheck="false"
+                :autosize="{ minRows: 3, maxRows: 3 }"
+                type="textarea"
+              />
               <el-button
                 type="primary"
                 @click="() => alternateArr.splice(index, 1)"
               >
                 删除
               </el-button>
+              <el-button type="primary" @click="() => ''"> 暂时不用 </el-button>
             </div>
           </el-form-item>
         </el-card>
@@ -744,7 +761,9 @@ ul {
   gap: 10px;
   user-select: none !important;
   padding: 0 30px;
-
+  :deep(textarea) {
+    resize: none;
+  }
   h1 {
     margin: 0;
     text-align: center;
@@ -788,7 +807,7 @@ ul {
     justify-content: end;
     gap: 10px;
     display: grid;
-    grid-template-columns: 160px 1fr 80px;
+    grid-template-columns: 160px 1fr 100px;
     span {
       text-align: center;
       color: #fff;
@@ -829,10 +848,11 @@ ul {
       :deep(.el-card__body) {
         display: grid;
         grid-template-columns: 50px 1fr;
+        grid-template-rows: 40px 1fr;
         justify-content: center;
         align-items: center;
         gap: 10px;
-
+        padding: 10px;
         .el-form-item {
           margin: 0;
         }
@@ -851,11 +871,25 @@ ul {
         display: grid;
         gap: 10px;
         grid-template-columns: 1fr 100px;
+        grid-template-rows: repeat(2, 1fr);
         width: 100%;
+        &.one {
+          grid-template-rows: repeat(1, 1fr);
+        }
+        .el-textarea {
+          grid-area: 1/ 1/ 3/ 2;
+        }
+        button {
+          margin-left: 0;
+        }
       }
     }
   }
-
+  :deep(.url-content) {
+    display: flex;
+    width: 100%;
+    gap: 20px;
+  }
   :deep(.el-form-item--large) {
     margin-bottom: 10px;
     .el-form-item__label,

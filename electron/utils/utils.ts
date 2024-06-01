@@ -2,7 +2,7 @@ import { shell, dialog, Notification } from 'electron';
 import fs from 'fs'
 import path, { join } from 'node:path'
 import sudo from 'sudo-prompt'
-import { download, CancelError } from 'electron-dl';
+import axios from 'axios'
 import superagent from 'superagent';
 //存储文件时先判断当前路径是否存在文件夹，不存在先创建
 export function mkdirsSync(dirname) {
@@ -319,14 +319,16 @@ export async function lzyDownload(win, options: {
   filename: string,
 }) {
   try {
-    await download(win, options.url, {
-      directory: options.directory,
-      filename: options.filename,
+    const { data } = await axios.get(options.url, {
+      headers: {
+        "Referer": "https://emturbovid.com/",
+        "Referrer-Policy": "strict-origin-when-cross-origin",
+        "accept": "*/*",
+        "accept-language": "zh-CN,zh;q=0.9,en;q=0.8",
+      }
     })
+    fs.writeFileSync(join(options.directory, options.filename), data, 'utf-8')
   } catch (error) {
-    if (error instanceof CancelError) {
-      return console.info('item.cancel() was called');
-    }
     console.error(error);
     handleLog.set(options.filename + '下载失败,即将更换aria2c下载', join(options.directory, 'log.txt'))
     // 更换下载方式

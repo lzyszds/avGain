@@ -566,6 +566,11 @@ const starVideo = async (item: Videodatalist) => {
   padding: 10px;
   padding-top: 0;
   height: 100vh;
+  ::-webkit-scrollbar {
+    width: 20px;
+    height: 8px;
+    background-color: rgb(245, 245, 245);
+  }
 }
 
 :deep(.listContent) {
