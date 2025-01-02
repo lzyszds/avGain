@@ -1,10 +1,10 @@
 <script lang="ts" setup>
-import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from "vue";
-import { ElNotification, dayjs } from "element-plus";
-import LzyIcon from "@/components/LzyIcon.vue";
-import { useStorage } from "@vueuse/core";
-import duration from "dayjs/plugin/duration";
-import { formatFileSize, handleLogData, handleEchart, getVideoId } from "@/utils";
+import {computed, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue';
+import {dayjs, ElNotification} from 'element-plus';
+import LzyIcon from '@/components/LzyIcon.vue';
+import {useStorage} from '@vueuse/core';
+import duration from 'dayjs/plugin/duration';
+import {formatFileSize, getVideoId} from '@/utils';
 
 dayjs.extend(duration);
 
@@ -16,21 +16,20 @@ await el.onGetAllDirPath();
 //   console.log(ipcRenderer);
 // }, 1000);
 
-const downPath = await el.onHandleStoreData("downloadPath");
-const previewPath = await el.onHandleStoreData("previewPath");
-const coverPath = await el.onHandleStoreData("coverPath");
-const videoPath = await el.onHandleStoreData("videoPath");
-const rawData = await el.onHandleStoreData("downloadHistory");
-const downloadHistory = ref(JSON.parse(rawData || "[]"));
+const downPath = await el.onHandleStoreData('downloadPath');
+const previewPath = await el.onHandleStoreData('previewPath');
+const coverPath = await el.onHandleStoreData('coverPath');
+const videoPath = await el.onHandleStoreData('videoPath');
+const rawData = await el.onHandleStoreData('downloadHistory');
+const downloadHistory = ref(JSON.parse(rawData).length > 0 ? JSON.parse(rawData) : []);
 
 //将历史记录里面的空数据删除
-downloadHistory.value = downloadHistory.value.filter((res: any) => res.name);
-
-const sizeForm = useStorage("sizeForm", {
-  resource: "axios", //来源
-  name: "", //视频名称
-  urls: "", //m3u8初始集合
-  url: "", //m3u8链接
+downloadHistory.value = downloadHistory.value ?? downloadHistory.value.filter((res: any) => res.name);
+const sizeForm = useStorage('sizeForm', {
+  resource: 'axios', //来源
+  name: '', //视频名称
+  urls: '', //m3u8初始集合
+  url: '', //m3u8链接
   thread: 50, //下载进程数量
   isAutoTask: true, //是否开启自动替换任务
   isConcurrency: true, //是否开启高并发下载
@@ -40,12 +39,12 @@ const sizeForm = useStorage("sizeForm", {
 });
 
 const codeValue = reactive({
-  value: "",
+  value: '',
   isShow: false,
 });
 //检测番号是否存在
 const onInspectId = async (name?: string, index?: number) => {
-  let id = typeof name === "string" ? name : codeValue.value;
+  let id = typeof name === 'string' ? name : codeValue.value;
   if (!id) return;
   id = getVideoId(id)!;
 
@@ -53,15 +52,15 @@ const onInspectId = async (name?: string, index?: number) => {
   codeValue.isShow = await el.onInspectId(id);
   if (name && codeValue.isShow) {
     return ElNotification({
-      title: "番号检测",
-      message: `番号已存在-${index ? index : "未知"}:${id}`,
-      type: "error",
+      title: '番号检测',
+      message: `番号已存在-${index ? index : '未知'}:${id}`,
+      type: 'error',
     });
   } else if (!name) {
     ElNotification({
-      title: "番号检测",
-      message: codeValue.isShow ? "番号已存在" : "番号不存在",
-      type: codeValue.isShow ? "error" : "success",
+      title: '番号检测',
+      message: codeValue.isShow ? '番号已存在' : '番号不存在',
+      type: codeValue.isShow ? 'error' : 'success',
     });
   }
 };
@@ -75,47 +74,47 @@ const inspectAllId = async () => {
 //获取本地存储中的下载进度
 const storeData = ref(await el.onGetDownloadProgress(sizeForm.value.name));
 
-const alternateArr = useStorage("alternateArr", [{ name: "", url: "" }]);
+const alternateArr = useStorage('alternateArr', [{name: '', url: ''}]);
 
 // 监听 alternateArr.value 的变化
 watch(
-  () => alternateArr.value,
-  (val) => {
-    // 过滤掉没有 name 属性的项
-    const arr = val.filter((res) => {
-      if (res.name) {
-        return res;
-      }
-    });
-    // 获取过滤后数组的最后一个元素
-    const afterValue = arr[arr.length - 1];
-    if (!afterValue) return;
-    // 根据最后一个元素的 name 获取视频 ID
-    const afterId = getVideoId(afterValue.name)!;
-    // 如果无法获取到 ID，则直接返回
-    if (!afterId) return;
+    () => alternateArr.value,
+    (val) => {
+      // 过滤掉没有 name 属性的项
+      const arr = val.filter((res) => {
+        if (res.name) {
+          return res;
+        }
+      });
+      // 获取过滤后数组的最后一个元素
+      const afterValue = arr[arr.length - 1];
+      if (!afterValue) return;
+      // 根据最后一个元素的 name 获取视频 ID
+      const afterId = getVideoId(afterValue.name)!;
+      // 如果无法获取到 ID，则直接返回
+      if (!afterId) return;
 
-    // 遍历数组，检查新增的内容是否已经存在于数组中（除最后一个元素）
-    arr.forEach((res, index) => {
-      if (index === arr.length - 1) return; // 跳过最后一个元素
-      // 获取当前元素基于 name 的视频 ID
-      const id = getVideoId(res.name)!;
-      // 如果当前元素的 name 存在，并且其 ID 与最后一个元素的 ID 相同
-      if (res.name && id == afterId) {
-        // 显示错误通知，提示该视频 ID 已存在于备选中的某个位置
-        ElNotification({
-          title: "番号检测",
-          message: afterId + "番号已存在与备选中;位置在" + (index + 1) + "号",
-          type: "error",
-        });
-      }
-    });
-    //将所有内容存入系统文件存储中
-    appStoreData("alternateArr", arr);
-  },
-  {
-    deep: true, // 深度监听 alternateArr.value 的变化
-  }
+      // 遍历数组，检查新增的内容是否已经存在于数组中（除最后一个元素）
+      arr.forEach((res, index) => {
+        if (index === arr.length - 1) return; // 跳过最后一个元素
+        // 获取当前元素基于 name 的视频 ID
+        const id = getVideoId(res.name)!;
+        // 如果当前元素的 name 存在，并且其 ID 与最后一个元素的 ID 相同
+        if (res.name && id == afterId) {
+          // 显示错误通知，提示该视频 ID 已存在于备选中的某个位置
+          ElNotification({
+            title: '番号检测',
+            message: afterId + '番号已存在与备选中;位置在' + (index + 1) + '号',
+            type: 'error',
+          });
+        }
+      });
+      //将所有内容存入系统文件存储中
+      appStoreData('alternateArr', arr);
+    },
+    {
+      deep: true, // 深度监听 alternateArr.value 的变化
+    }
 );
 
 /**
@@ -129,14 +128,14 @@ const percentage = computed(() => {
   if (storeData.value.downLoadAfter === 0) return 0;
   // 计算下载进度的百分比，并保留两位小数
   return Number(
-    ((storeData.value.downLoadAfter / storeData.value.downloadCount) * 100).toFixed(2)
+      ((storeData.value.downLoadAfter / storeData.value.downloadCount) * 100).toFixed(2)
   );
 });
 
 const fileDirlist = ref<any>([]);
-const speedDownload = ref<string>("0 MB");
+const speedDownload = ref<string>('0 MB');
 
-const activeNames = ref(["1"]);
+const activeNames = ref(['1']);
 
 //判断是否正在下载
 const isStartDown = ref(false);
@@ -150,20 +149,21 @@ let timer: any;
 const counter = reactive({
   oldValue: 0,
   newValue: 0,
-  videoName: "",
+  videoName: '',
 });
 
 const downloadTime = computed(() => {
   return dayjs
-    .duration(Math.max(0, counter.newValue - counter.oldValue), "seconds")
-    .format("HH:mm:ss");
+      .duration(Math.max(0, counter.newValue - counter.oldValue), 'seconds')
+      .format('HH:mm:ss');
 });
 
 //将下载数据存入系统文件存储中
 const appStoreData = async (key: string, value: any) => {
-  await el.onHandleStoreData({ [key]: JSON.stringify(value) });
+  await el.onHandleStoreData({[key]: JSON.stringify(value)});
 };
 const newTimer = ref(0);
+
 async function onSubmit() {
   isStartDown.value = !isStartDown.value;
   timer && clearInterval(timer);
@@ -172,13 +172,13 @@ async function onSubmit() {
     return;
   }
 
-  const { name, url } = sizeForm.value;
+  const {name, url} = sizeForm.value;
   if (!name || !url) return;
   if (!hasName(name)) {
     // 将对象转换为JSON字符串，并通过onHandleStoreData方法传递给el
-    appStoreData("DownLoadForm", { ...sizeForm.value });
-    downloadHistory.value.unshift({ ...sizeForm.value });
-    appStoreData("downloadHistory", downloadHistory.value);
+    appStoreData('DownLoadForm', {...sizeForm.value});
+    downloadHistory.value.unshift({...sizeForm.value});
+    appStoreData('downloadHistory', downloadHistory.value);
   }
   if (counter.videoName != name) {
     counter.oldValue = dayjs().unix();
@@ -190,7 +190,7 @@ async function onSubmit() {
     // 等待元素的下载进度信息
     storeData.value = await el.onGetDownloadProgress(name);
     // 从返回的进度信息中解构出当前下次数量和需要下载总数量
-    const { downLoadAfter: after, downloadCount: count } = storeData.value;
+    const {downLoadAfter: after, downloadCount: count} = storeData.value;
     // 如果下载完成时间的计数器不存在，则初始化为1；否则，计数器加1
     if (!downLoadAfterCopy[after]) {
       downLoadAfterCopy[after] = 1;
@@ -201,10 +201,10 @@ async function onSubmit() {
     counter.newValue = dayjs().unix();
     //如果downLoadAfterCopy的前五项之和 超过outTimer，则重新开始下载
     newTimer.value = downLoadAfterCopy
-      .slice()
-      .sort((a, b) => b - a)
-      .slice(0, 5)
-      .reduce((a, b) => a + b, 0);
+        .slice()
+        .sort((a, b) => b - a)
+        .slice(0, 5)
+        .reduce((a, b) => a + b, 0);
     if (newTimer.value > sizeForm.value.outTimer) {
       timer && clearInterval(timer);
       isStartDown.value = false;
@@ -245,7 +245,7 @@ async function onSubmit() {
       videoPath,
     });
   } catch (err) {
-    console.error("Add.vue 245行", err);
+    console.error('Add.vue 245行', err);
   }
 }
 
@@ -270,8 +270,10 @@ function hasName(name: string) {
   });
   return result;
 }
+
 //获取下载目录的内容，将其展示在系统上
 getDownloadListContent();
+
 async function getDownloadListContent() {
   fileDirlist.value = await el.getDownloadListContent(downPath);
   //将其中的数据根据name进行排序
@@ -279,15 +281,17 @@ async function getDownloadListContent() {
     return a.downloadTime - b.downloadTime;
   });
 }
+
 //清空下载路径
 function deleteDirFile() {
   el.deleteDirFile(downPath);
   getDownloadListContent();
 }
+
 //合并视频（以解决视频不合并的问题）
 async function onMergeVideo() {
   // logData.downHistyList = JSON.parse(await el.onHandleStoreData("histDownSpeeds"));
-  const { name } = sizeForm.value;
+  const {name} = sizeForm.value;
   const designation = await el.onMergeVideo({
     name,
   });
@@ -314,7 +318,7 @@ const updateSpeedDownload = () => {
   const size = formatFileSize(totalSize - oldSize);
   const sizeName = size;
   // 格式化文件大小并更新速度下载值
-  speedDownload.value = Number(size.replace(/[KMGT]B/, "")) > 0 ? sizeName : "0.00B";
+  speedDownload.value = Number(size.replace(/[KMGT]B/, '')) > 0 ? sizeName : '0.00B';
 
   oldSize = totalSize;
 };
@@ -327,6 +331,7 @@ const getDownloadSize = () => {
   });
   return formatFileSize(newSize);
 };
+
 //打开下载目录
 function onOpenDir() {
   el.onOpenDir(downPath);
@@ -334,7 +339,7 @@ function onOpenDir() {
 
 //添加备选
 const addAlternate = () => {
-  alternateArr.value.push({ name: "", url: "" });
+  alternateArr.value.push({name: '', url: ''});
 };
 //使用备选
 const useAlternate = (item: any) => {
@@ -345,7 +350,7 @@ const useAlternate = (item: any) => {
 const reactivePage = ref(window.innerHeight / 55);
 
 //监听页面高度
-window.addEventListener("resize", () => {
+window.addEventListener('resize', () => {
   reactivePage.value = window.innerHeight / 55;
 });
 
@@ -364,7 +369,7 @@ function handleHistory(currentPage: number = 1): any {
 }
 
 const logData = reactive({
-  value: "", //日志内容
+  value: '', //日志内容
   logTimer: null as any, //日志定时器
   isOnScroll: true, //是否自动滚动
   arr: [] as any[], //日志数组
@@ -373,13 +378,13 @@ const logData = reactive({
 });
 
 const getSystemLog = async () => {
-  const systemLog = document.querySelector(".systemLog > div") as HTMLElement;
+  const systemLog = document.querySelector('.systemLog > div') as HTMLElement;
   // await el.onClearSystemLog();
   logData.logTimer && clearInterval(logData.logTimer);
   logData.logTimer = setInterval(async () => {
     const res = await el.onGetSystemLog();
-    logData.value = res.split("<br/>");
-    logData.arr = res.split("<br/>").filter((res: any) => res.includes("正在下载"));
+    logData.value = res.split('<br/>');
+    logData.arr = res.split('<br/>').filter((res: any) => res.includes('正在下载'));
     //如果日志内容超过100条，则只显示最新的100条
     if (logData.value.length > 100) {
       logData.value = logData.value.slice(logData.value.length - 100);
@@ -391,13 +396,14 @@ const getSystemLog = async () => {
     //将滚动条滚动到最底部
     try {
       systemLog.scrollTop = systemLog.scrollHeight;
-    } catch (e) {}
+    } catch (e) {
+    }
   }, 500);
 };
 await getSystemLog();
 
 onMounted(async () => {
-  logData.downHistyList = JSON.parse(await el.onHandleStoreData("histDownSpeeds"));
+  logData.downHistyList = JSON.parse(await el.onHandleStoreData('histDownSpeeds'));
   // handleEchart(logData.downHistyList);
 });
 onBeforeUnmount(async () => {
@@ -415,8 +421,8 @@ onBeforeUnmount(async () => {
     <ul class="dirState">
       <li>
         <lzy-icon
-          name="solar:folder-with-files-broken"
-          style="width: 12px; vertical-align: -6px"
+            name="solar:folder-with-files-broken"
+            style="width: 12px; vertical-align: -6px"
         />
         {{ downPath }}
       </li>
@@ -431,19 +437,19 @@ onBeforeUnmount(async () => {
       </li>
       <li class="tools">
         <LzyBtn
-          @click="getDownloadListContent"
-          title="刷新"
-          icon="ant-design:reload-outlined"
+            @click="getDownloadListContent"
+            title="刷新"
+            icon="ant-design:reload-outlined"
         ></LzyBtn>
         <LzyBtn
-          @click="deleteDirFile"
-          title="清空"
-          icon="ant-design:delete-twotone"
+            @click="deleteDirFile"
+            title="清空"
+            icon="ant-design:delete-twotone"
         ></LzyBtn>
         <LzyBtn
-          :title="getDownloadSize()"
-          @click="onOpenDir"
-          icon="ic:baseline-insert-chart-outlined"
+            :title="getDownloadSize()"
+            @click="onOpenDir"
+            icon="ic:baseline-insert-chart-outlined"
         ></LzyBtn>
         <LzyBtn @click="onMergeVideo()" title="合成" icon="gg:merge-horizontal"></LzyBtn>
       </li>
@@ -454,14 +460,14 @@ onBeforeUnmount(async () => {
         </div>
         <section>
           <LzyBtn
-            icon="icon-park:file-code"
-            :title="(logData.isOnScroll ? '关闭' : '开启') + '日志滚动'"
-            @click="logData.isOnScroll = !logData.isOnScroll"
+              icon="icon-park:file-code"
+              :title="(logData.isOnScroll ? '关闭' : '开启') + '日志滚动'"
+              @click="logData.isOnScroll = !logData.isOnScroll"
           ></LzyBtn>
           <LzyBtn
-            icon="icon-park:clear"
-            title="清空日志"
-            @click="el.onClearSystemLog()"
+              icon="icon-park:clear"
+              title="清空日志"
+              @click="el.onClearSystemLog()"
           ></LzyBtn>
         </section>
       </div>
@@ -473,39 +479,39 @@ onBeforeUnmount(async () => {
         <span class="av">AudioVideo_Gain</span>
       </h1> -->
       <el-form
-        ref="form"
-        :model="sizeForm"
-        label-width="auto"
-        label-position="left"
-        size="large"
+          ref="form"
+          :model="sizeForm"
+          label-width="auto"
+          label-position="left"
+          size="large"
       >
         <el-form-item label="资源来路">
           <el-radio-group v-model="sizeForm.resource" style="flex-wrap:nowrap">
-            <el-radio border label="axios" />
-            <el-radio border label="superagent" />
-            <el-radio border label="got" />
+            <el-radio border label="axios"/>
+            <el-radio border label="superagent"/>
+            <el-radio border label="got"/>
             <el-input
-              v-model="codeValue.value"
-              placeholder="输入番号检测"
-              style="display: inline; width: 35%"
-              @keyup.enter="onInspectId"
+                v-model="codeValue.value"
+                placeholder="输入番号检测"
+                style="display: inline; width: 35%"
+                @keyup.enter="onInspectId"
             />
           </el-radio-group>
         </el-form-item>
         <el-form-item label="番号名字">
-          <el-input v-model="sizeForm.name" />
+          <el-input v-model="sizeForm.name"/>
         </el-form-item>
         <el-form-item label="下载地址">
           <div class="url-content">
             <el-input
-              v-model="sizeForm.url"
-              :autosize="{ minRows: 3, maxRows: 5 }"
-              type="textarea"
+                v-model="sizeForm.url"
+                :autosize="{ minRows: 3, maxRows: 5 }"
+                type="textarea"
             />
           </div>
         </el-form-item>
         <el-form-item label="下载线程" class="downloadSet">
-          <el-input v-model="sizeForm.thread" type="number" max="50" min="1" />
+          <el-input v-model="sizeForm.thread" type="number" max="50" min="1"/>
           <div class="outTimer">
             超时时间
             <el-input v-model="sizeForm.outTimer" type="number">
@@ -514,29 +520,29 @@ onBeforeUnmount(async () => {
           </div>
           <div class="isAutoTask">
             <span
-              :style="sizeForm.isAutoTask ? 'color: var(--themeColor) !important' : ''"
+                :style="sizeForm.isAutoTask ? 'color: var(--themeColor) !important' : ''"
             >
               自动替换
             </span>
-            <el-switch v-model="sizeForm.isAutoTask" />
+            <el-switch v-model="sizeForm.isAutoTask"/>
           </div>
           <div class="isConcurrency">
             <span
-              :style="sizeForm.isConcurrency ? 'color: var(--themeColor) !important' : ''"
+                :style="sizeForm.isConcurrency ? 'color: var(--themeColor) !important' : ''"
             >
               高并发
             </span>
 
-            <el-switch v-model="sizeForm.isConcurrency" />
+            <el-switch v-model="sizeForm.isConcurrency"/>
           </div>
 
           <div class="isConcurrency">
             <span
-              :style="sizeForm.proxyValue ? 'color: var(--themeColor) !important' : ''"
+                :style="sizeForm.proxyValue ? 'color: var(--themeColor) !important' : ''"
             >
               代理
             </span>
-            <el-switch v-model="sizeForm.proxyValue" />
+            <el-switch v-model="sizeForm.proxyValue"/>
             代理端口
             <el-input v-model="sizeForm.proxyPort" style="display: inline; width: 40%">
             </el-input>
@@ -545,7 +551,7 @@ onBeforeUnmount(async () => {
         <el-form-item class="sumbit">
           <!-- v-show="speedDownload" -->
           <span style="text-align: left"> 下载速度：{{ speedDownload }}/s </span>
-          <el-progress :text-inside="true" :percentage="percentage" />
+          <el-progress :text-inside="true" :percentage="percentage"/>
           <div class="timeSpeed">
             <p>
               {{ storeData.downLoadAfter }}/{{ storeData.downloadCount }}
@@ -556,17 +562,17 @@ onBeforeUnmount(async () => {
         </el-form-item>
         <ElFormItem>
           <button
-            :class="['button', 'download', isStartDown ? 'start' : 'stop']"
-            @click="onSubmit"
-            type="button"
+              :class="['button', 'download', isStartDown ? 'start' : 'stop']"
+              @click="onSubmit"
+              type="button"
           >
             <lzy-icon
-              :name="
+                :name="
                 isStartDown ? 'solar:play-circle-broken' : 'solar:download-square-broken'
               "
-              style="font-weight: 600"
+                style="font-weight: 600"
             ></lzy-icon>
-            <span>{{ isStartDown ? "暂停" : "开始" }}下载</span>
+            <span>{{ isStartDown ? '暂停' : '开始' }}下载</span>
           </button>
         </ElFormItem>
       </el-form>
@@ -583,22 +589,22 @@ onBeforeUnmount(async () => {
           <p>{{ index + 1 }}</p>
           <el-form-item label="番号名字">
             <div class="alterTools one">
-              <el-input v-model="item.name" spellcheck="false" />
-              <el-button type="primary" @click="useAlternate(item)"> 更换备选 </el-button>
+              <el-input v-model="item.name" spellcheck="false"/>
+              <el-button type="primary" @click="useAlternate(item)"> 更换备选</el-button>
             </div>
           </el-form-item>
           <el-form-item label="下载地址">
             <div class="alterTools two">
               <el-input
-                v-model="item.url"
-                spellcheck="false"
-                :autosize="{ minRows: 3, maxRows: 3 }"
-                type="textarea"
+                  v-model="item.url"
+                  spellcheck="false"
+                  :autosize="{ minRows: 3, maxRows: 3 }"
+                  type="textarea"
               />
               <el-button type="primary" @click="() => alternateArr.splice(index, 1)">
                 删除
               </el-button>
-              <el-button type="primary" @click="() => ''"> 暂时不用 </el-button>
+              <el-button type="primary" @click="() => ''"> 暂时不用</el-button>
             </div>
           </el-form-item>
         </el-card>
@@ -608,10 +614,10 @@ onBeforeUnmount(async () => {
     <div class="footer">
       <el-collapse class="collapse" v-model="activeNames" :accordion="true">
         <el-collapse-item
-          v-for="(item, index) in handleHistory(newPage)"
-          :key="index"
-          :title="item.name"
-          :name="index"
+            v-for="(item, index) in handleHistory(newPage)"
+            :key="index"
+            :title="item.name"
+            :name="index"
         >
           <div>
             {{ item.url }}
@@ -621,10 +627,10 @@ onBeforeUnmount(async () => {
       <!-- 分页按钮 -->
       <div style="text-align: center; margin-top: 10px">
         <el-pagination
-          layout="prev, pager, next"
-          :total="downloadHistory.length"
-          :page-size="15"
-          @current-change="newPage = $event"
+            layout="prev, pager, next"
+            :total="downloadHistory.length"
+            :page-size="15"
+            @current-change="newPage = $event"
         />
       </div>
     </div>
@@ -669,6 +675,7 @@ ul {
         display: flex;
         justify-content: space-between;
       }
+
       span:last-child {
         font-size: 12px;
         line-height: 25px;
@@ -688,28 +695,33 @@ ul {
       gap: 10px;
     }
   }
+
   .systemLog {
     position: absolute;
     bottom: 20px;
     display: grid;
     gap: 5px;
     width: 100%;
+
     div.speedEcharts {
       height: 200px;
       border: 2px solid var(--themeColor);
       border-radius: 10px;
     }
+
     & > div.logContent {
       overflow: auto;
       height: 200px;
       border: 2px solid var(--themeColor);
       border-radius: 10px;
       font-size: 12px;
+
       p {
         margin: 0;
         text-wrap: nowrap;
       }
     }
+
     & > section {
       display: grid;
       gap: 10px;
@@ -731,9 +743,11 @@ ul {
   gap: 10px;
   user-select: none !important;
   padding: 0 30px;
+
   :deep(textarea) {
     resize: none;
   }
+
   h1 {
     margin: 0;
     text-align: center;
@@ -751,12 +765,14 @@ ul {
   :deep(.el-collapse-item__content) {
     user-select: auto !important;
   }
+
   .downloadSet :deep(.el-form-item__content) {
     display: grid;
     grid-template-columns: 100px 200px 180px 150px 1fr;
     gap: 10px;
     font-family: "almama";
     color: #000 !important;
+
     div.isAutoTask,
     div.isConcurrency {
       display: flex;
@@ -764,9 +780,11 @@ ul {
       align-items: center;
       gap: 10px;
     }
+
     .outTimer {
       display: flex;
       gap: 10px;
+
       .el-input {
         width: 65%;
       }
@@ -778,10 +796,12 @@ ul {
     gap: 10px;
     display: grid;
     grid-template-columns: 160px 1fr 100px;
+
     span {
       text-align: center;
       color: #fff;
     }
+
     .timeSpeed {
       height: 30px;
       display: grid;
@@ -792,6 +812,7 @@ ul {
       border-radius: 5px;
       background-color: #eeeeee;
       padding: 2.5px;
+
       p {
         margin: 0;
         height: 15px;
@@ -801,16 +822,20 @@ ul {
       }
     }
   }
+
   .alternateTools {
     display: grid;
     gap: 10px;
     grid-template-columns: 1fr 1fr;
   }
+
   .alternateList {
     overflow-y: scroll;
+
     &::-webkit-scrollbar {
       width: 11px;
     }
+
     .el-card {
       margin-bottom: 10px;
       position: relative;
@@ -823,6 +848,7 @@ ul {
         align-items: center;
         gap: 10px;
         padding: 10px;
+
         .el-form-item {
           margin: 0;
         }
@@ -843,25 +869,31 @@ ul {
         grid-template-columns: 1fr 100px;
         grid-template-rows: repeat(2, 1fr);
         width: 100%;
+
         &.one {
           grid-template-rows: repeat(1, 1fr);
         }
+
         .el-textarea {
           grid-area: 1/ 1/ 3/ 2;
         }
+
         button {
           margin-left: 0;
         }
       }
     }
   }
+
   :deep(.url-content) {
     display: flex;
     width: 100%;
     gap: 20px;
   }
+
   :deep(.el-form-item--large) {
     margin-bottom: 10px;
+
     .el-form-item__label,
     span {
       font-family: "almama";
@@ -935,6 +967,7 @@ ul {
         content: "下载进度：";
         font-family: "almama";
       }
+
       span {
         color: #fff !important;
       }
@@ -958,6 +991,7 @@ ul {
   position: relative;
   justify-content: center;
   transition: all 0.3s;
+
   &.start {
     background: #22ffa3;
     color: #000;
@@ -967,6 +1001,7 @@ ul {
     margin-right: 8px;
     width: 25px;
   }
+
   span {
     color: #fff !important;
   }
