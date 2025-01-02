@@ -139,6 +139,7 @@ export class WindowManager {
         if (typeof data === 'string') {
           if (!storeFile) return null
           const json = JSON.parse(storeFile)
+          if (!json[data]) return "{}"
           return json[data]
         } else {
           //如果是存储数据
@@ -237,8 +238,8 @@ export class WindowManager {
 
 
           // 从M3U8 URL计算出需要下载的视频文件信息。
-          let { dataArr, dataCount } = await processM3u8.bind(that)();
-          dataArr = cleanM3u8Data(dataArr, downPath);
+          let { dataArr: urlAllData, dataCount } = await processM3u8.bind(that)();
+          let dataArr = cleanM3u8Data(urlAllData, downPath);
           if (dataArr.length <= thread) {
             thread = dataArr.length;
             arg.isConcurrency = false;
@@ -256,7 +257,7 @@ export class WindowManager {
 
           // 将M3U8数据分割为等份，按线程数分配。
           const countArr = splitArrayIntoEqualChunks(dataArr, thread);
-
+          // console.log(countArr)
           //创建进程之前删除旧的进程
           this.workerArr.forEach((worker) => {
             worker.terminate()
@@ -271,6 +272,7 @@ export class WindowManager {
             // 向Worker线程发送任务信息，启动下载。
             separateThread.postMessage({
               urlData: countArr[i],
+              urlAllData,
               downPath: that.pathJson.downloadPath + `/${designation}`,
               docPath: that.docPath,
               headers,
@@ -379,6 +381,7 @@ export class WindowManager {
 
         const resulted = await merge(newname, downloadPath + `/${designation}`, videoPath)
         if (resulted === '合成成功') {
+
           //视频合并成功后，下载封面和预览视频
           await this.getPreviewVideo(designation, newname, previewPath, coverPath)
           //删除下载的视频片段
@@ -507,7 +510,6 @@ export class WindowManager {
             if (video === preview) items.splice(items.indexOf(video), 1)
           })
         })
-        console.log(`lzy  items:`, items)
         items.forEach((item) => {
           const videoId = getVideoId(item)
           if (videoId) {
@@ -555,7 +557,6 @@ export class WindowManager {
     const downloadWithRetry = (url: string, localPath: string, index: number): Promise<void> => {
       if (index == 1) url = url.replace('?class=normal', '')
       else if (index == 2) url = url.replace('-uncensored-leak', '')
-      console.log(`lzy  url:`, url)
       return this.downloadFile(url, localPath).catch((error) => {
         this.setLog(`🔴 (即将重试)下载出错: ${error} <br/>`);
         if (index < maxRetries) {

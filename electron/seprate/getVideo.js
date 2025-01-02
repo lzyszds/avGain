@@ -35,6 +35,7 @@ function getVideo(urlData, i, index, headers, path, docPath) {
         index
       )
     } catch (e) {
+      console.log(e);
       handleLog.set(`🔴 ${e} <br/>`, docPath + '\\log.txt')
     }
 

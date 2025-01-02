@@ -138,6 +138,7 @@ export function formatFileSize(fileSize: any) {
 export function getMp4File(item, type) {
   const fileBuffer = fs.readFileSync(item);
   const blob = new Blob([fileBuffer], { type });
+  //@ts-ignore
   const videoUrl = URL.createObjectURL(blob);
   return videoUrl
 }
@@ -426,7 +427,13 @@ export function cleanM3u8Data(dataArr: string[], downloadPath: string) {
   const mapArr = new Map()
   //将下载的文件名存入map中
   dataArr.forEach((item) => {
-    const m3u8Name = path.basename(item).match(match)[0].split(".")[0]
+
+    let m3u8Name = ''
+    try {
+      m3u8Name = path.basename(item).match(match)[0].split(".")[0]
+    } catch (e) {
+      m3u8Name = path.basename(item)
+    }
     mapArr.set(m3u8Name, item)
   })
   //将已经下载的文件名删除
@@ -480,17 +487,17 @@ export async function processM3u8(this) {
 
     // 初始化并获取过滤后的段数据
     let dataArr = myParser.manifest.segments || [];
+    debugger
     const dataCount = dataArr.length;
     const filePath = path.join(this.pathJson.downloadPath, designation);
-
     // 使用异步方式读取目录避免性能问题
     const files = fs.readdirSync(filePath);
-    files.forEach((file) => {
-      dataArr = dataArr.filter((item) => {
-        const fileName = path.basename(item.uri);
-        return fileName.replace(/[^\d]/g, '') !== file.replace(/[^\d]/g, '');
-      });
-    });
+    // files.forEach((file) => {
+    //   dataArr = dataArr.filter((item) => {
+    //     const fileName = path.basename(item.uri);
+    //     return fileName.replace(/[^\d]/g, '') !== file.replace(/[^\d]/g, '');
+    //   });
+    // });
     dataArr = dataArr.map((item) => {
       return URL.resolve(url, item.uri);
     })

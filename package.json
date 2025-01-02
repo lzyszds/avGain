@@ -13,6 +13,15 @@
     "vue3",
     "vue"
   ],
+  "type": "module",
+  "scripts": {
+    "dev": "cross-env NODE_OPTIONS='--max-old-space-size=4096' vite",
+    "clean": "tsc --build --clean",
+    "create": "node createSeprate.js",
+    "viteBuild": "vite build",
+    "build": "vite build && electron-builder && node postbuild.js",
+    "electronBuild": "electron-builder --win"
+  },
   "build": {
     "productName": "AvGain",
     "copyright": "Copyright © 2024 lzyszds ",
@@ -46,15 +55,6 @@
       "VITE_DEV_SERVER_URL": "http://127.0.0.1:3344/"
     }
   },
-  "type": "module",
-  "scripts": {
-    "dev": "cross-env NODE_OPTIONS='--max-old-space-size=4096' vite",
-    "clean": "tsc --build --clean",
-    "create": "node createSeprate.js",
-    "viteBuild": "vite build",
-    "build": "vite build && electron-builder",
-    "electronBuild": "electron-builder --win"
-  },
   "dependencies": {
     "@globalhive/vuejs-tour": "^1.3.7",
     "@iconify-icons/dashicons": "^1.2.4",
@@ -63,7 +63,6 @@
     "@types/color": "^3.0.3",
     "@types/fluent-ffmpeg": "^2.1.24",
     "@types/node": "^20.11.30",
-    "@vitejs/plugin-vue": "^4.2.3",
     "@vueuse/core": "^10.6.1",
     "@vueuse/shared": "^10.6.1",
     "autoprefixer": "^10.4.14",
@@ -74,6 +73,7 @@
     "electron-store": "^9.0.0",
     "element-plus": "^2.3.8",
     "fluent-ffmpeg": "^2.1.2",
+    "got": "^14.4.5",
     "https": "^1.0.0",
     "m3u8-parser": "^7.1.0",
     "plyr": "^3.7.8",
