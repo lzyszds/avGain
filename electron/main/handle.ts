@@ -1,17 +1,28 @@
-import { ipcMain, dialog, nativeTheme, BrowserWindow, OpenDialogSyncOptions, shell } from 'electron';
-import type { App } from 'electron';
+import type {App} from 'electron';
+import {BrowserWindow, dialog, ipcMain, OpenDialogSyncOptions, shell} from 'electron';
 import fs from 'fs';
 import path from 'path';
 import https from 'https'
 import {
+  checkFileFoundError,
+  cleanM3u8Data,
+  createSystemStore,
+  formatFileSize,
+  getFolderSize,
+  getHeaders,
+  getStoreData,
+  getVideoId,
+  handleLog,
   mkdirsSync,
-  createSystemStore, formatFileSize, quickSortByTimestamp, storeData, getStoreData,
-  checkFileFoundError, getFolderSize, downloadM3U8,
-  handleLog, sanitizeVideoName, getVideoId, processM3u8, cleanM3u8Data, splitArrayIntoEqualChunks, getHeaders
+  processM3u8,
+  quickSortByTimestamp,
+  sanitizeVideoName,
+  splitArrayIntoEqualChunks,
+  storeData
 } from '../utils/utils';
-import { dayjs } from 'element-plus'
-import { Worker } from "worker_threads";
-import { merge } from '../utils/merge'
+import {dayjs} from 'element-plus'
+import {Worker} from 'worker_threads';
+import {merge} from '../utils/merge'
 
 
 /**
@@ -139,7 +150,7 @@ export class WindowManager {
         if (typeof data === 'string') {
           if (!storeFile) return null
           const json = JSON.parse(storeFile)
-          if (!json[data]) return "{}"
+          if (!json[data]) return '{}'
           return json[data]
         } else {
           //如果是存储数据
@@ -154,10 +165,11 @@ export class WindowManager {
         }
       },
       onGetListData: async (event: Electron.IpcMainInvokeEvent, arg: string) => {
-        const { coverPath,
+        const {
+          coverPath,
           previewPath,
           videoPath,
-          starArr
+          starArr = []
         } = await this.eventExample().onGetAllDirPath(event, 'all')
 
         const that = this
@@ -178,13 +190,13 @@ export class WindowManager {
             try {
               stat = fs.statSync(`${videoPath}/${name}.mp4`)
               datails = {
-                time: dayjs(stat.birthtimeMs).format("YYYY-MM-DD HH:mm"),
+                time: dayjs(stat.birthtimeMs).format('YYYY-MM-DD HH:mm'),
                 size: formatFileSize(stat.size),
               }
             } catch (e) {
               stat = fs.statSync(`${coverPath}/${name}.jpg`)
               datails = {
-                time: dayjs(stat.birthtimeMs).format("YYYY-MM-DD HH:mm"),
+                time: dayjs(stat.birthtimeMs).format('YYYY-MM-DD HH:mm'),
                 size: formatFileSize(stat.size),
               }
             }
@@ -219,9 +231,9 @@ export class WindowManager {
         const that = this;
         return new Promise(async (resolve, reject) => {
           // 解构从前端进程传入的参数。 resource:资源请求方式
-          let { name, url, thread, downPath } = arg;
+          let {name, url, thread, downPath} = arg;
           // 获取HTTP请求头信息。
-          const headers = getHeaders("SuperJav");
+          const headers = getHeaders('SuperJav');
           //截取番号出来
           const designation = getVideoId(name)
           // 清洗和处理视频名称。
@@ -238,7 +250,7 @@ export class WindowManager {
 
 
           // 从M3U8 URL计算出需要下载的视频文件信息。
-          let { dataArr: urlAllData, dataCount } = await processM3u8.bind(that)();
+          let {dataArr: urlAllData, dataCount} = await processM3u8.bind(that)();
           let dataArr = cleanM3u8Data(urlAllData, downPath);
           if (dataArr.length <= thread) {
             thread = dataArr.length;
@@ -276,7 +288,7 @@ export class WindowManager {
               downPath: that.pathJson.downloadPath + `/${designation}`,
               docPath: that.docPath,
               headers,
-              sizeData: { ...arg }
+              sizeData: {...arg}
             });
           }
         });
@@ -288,7 +300,7 @@ export class WindowManager {
         })
         this.workerArr = []
         //发送日志提醒
-        this.setLog("🟡 下载任务已暂停<br/>")
+        this.setLog('🟡 下载任务已暂停<br/>')
       },
       //获取下载目录内容
       getDownloadListContent: async (event: Electron.IpcMainInvokeEvent, arg: any) => {
@@ -297,9 +309,9 @@ export class WindowManager {
         if (arg) {
           arr = fs.readdirSync(arg).map(file => {
             return {
-              state: getFolderSize(arg + "/" + file),
+              state: getFolderSize(arg + '/' + file),
               name: file,
-              downloadTime: dayjs(fs.statSync(arg + "/" + file).birthtimeMs).format("X")
+              downloadTime: dayjs(fs.statSync(arg + '/' + file).birthtimeMs).format('X')
             }
           })
         }
@@ -313,7 +325,7 @@ export class WindowManager {
             fs.readdirSync(arg).forEach((file) => {
               //判断当前文件是否是文件夹
               if (fs.statSync(arg + '/' + file).isDirectory()) {
-                fs.rmSync(arg + '/' + file, { recursive: true })
+                fs.rmSync(arg + '/' + file, {recursive: true})
               } else {
                 fs.unlinkSync(arg + '/' + file)
               }
@@ -337,7 +349,7 @@ export class WindowManager {
 
         const setLog = this.setLog
 
-        const { videoPath, previewPath, coverPath } = this.pathJson
+        const {videoPath, previewPath, coverPath} = this.pathJson
         fs.access(`${videoPath}/${name}.mp4`, (err) => {
           if (err) return setLog('🔴 文件不存在 <br/>')
           try {
@@ -363,8 +375,8 @@ export class WindowManager {
       //合并视频
       onMergeVideo: async (event: Electron.IpcMainInvokeEvent, arg: any) => {
         this.setLog(`🟢 开始合并视频 <br/> `)
-        const { previewPath, coverPath, downloadPath, videoPath } = this.pathJson
-        let { name } = arg
+        const {previewPath, coverPath, downloadPath, videoPath} = this.pathJson
+        let {name} = arg
         //截取番号出来
         const designation = getVideoId(name)
         //替换名字非法字符 保留日语和中文字符，并删除其他非字母数字字符
@@ -385,7 +397,7 @@ export class WindowManager {
           //视频合并成功后，下载封面和预览视频
           await this.getPreviewVideo(designation, newname, previewPath, coverPath)
           //删除下载的视频片段
-          fs.rm(downloadPath + `/${designation}`, { recursive: true }, (err) => {
+          fs.rm(downloadPath + `/${designation}`, {recursive: true}, (err) => {
             if (err) return this.setLog(`🔴 视频片段删除失败:${err} <br/>`)
             this.setLog(`🟢 视频合并成功,视频片段已删除 <br/>`)
           })
@@ -437,7 +449,7 @@ export class WindowManager {
           return this.eventExample().onGetAllDirPath(event, arg)
         }
         const json = JSON.parse(storeFile)
-        const { coverPath, previewPath, videoPath, downloadPath } = json
+        const {coverPath, previewPath, videoPath, downloadPath} = json
         this.pathJson = {
           coverPath,
           previewPath,
@@ -456,7 +468,7 @@ export class WindowManager {
         //先将番号提取处理
         const designation = getVideoId(arg)
         //从文件夹中获取数据
-        const { downloadPath } = this.pathJson
+        const {downloadPath} = this.pathJson
         const storeData = getStoreData(this.app)
         try {
           const avList = fs.readdirSync(downloadPath + '/' + designation)
@@ -501,7 +513,7 @@ export class WindowManager {
       },
       //修复封面和预览
       onRepairCover: async (event: Electron.IpcMainInvokeEvent, arg: any) => {
-        const { coverPath, previewPath, videoPath } = this.pathJson
+        const {coverPath, previewPath, videoPath} = this.pathJson
         const that = this
         const items = []
         fs.readdirSync(videoPath).forEach((video) => {
@@ -520,12 +532,13 @@ export class WindowManager {
       },
       //获取预览视频
       onGetPreviewVideo: async (event: Electron.IpcMainInvokeEvent, arg: any) => {
-        const { designation, name, index } = arg
-        const { previewPath, coverPath } = this.pathJson
+        const {designation, name, index} = arg
+        const {previewPath, coverPath} = this.pathJson
         return this.getPreviewVideo(designation, name, previewPath, coverPath, index, index,)
       }
     }
   }
+
   private downloadFile(url: string, localPath: string): Promise<void> {
     return new Promise((resolve, reject) => {
       https.get(url, (response) => {
