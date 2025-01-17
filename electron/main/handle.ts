@@ -524,6 +524,8 @@ export class WindowManager {
         })
         items.forEach((item) => {
           const videoId = getVideoId(item)
+          console.log(videoId);
+          
           if (videoId) {
             const name = item.split('.mp4')[0]
             that.getPreviewVideo(videoId, name, previewPath, coverPath)
@@ -560,7 +562,7 @@ export class WindowManager {
     if (name.indexOf('desktop') == 0) return
 
     const maxRetries = 3;
-    const host = 'https://eightcha.com/';
+    const host = 'https://fourhoi.com/';
     id = id.toLowerCase();
 
     const coverUrl = host + `${id}-uncensored-leak/cover.jpg?class=normal`;
